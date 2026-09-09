@@ -1,25 +1,42 @@
 import ParticipationStat from "@/components/ParticipationStat";
 import PlaceholderImage from "@/components/PlaceholderImage";
 import PreviewLink from "@/components/PreviewLink";
+import ResearchMetrics from "@/components/ResearchMetrics";
 import Section from "@/components/Section";
 import SurveyButton from "@/components/SurveyButton";
-import TestimonialCard from "@/components/TestimonialCard";
 import TriMark from "@/components/TriMark";
+import { DEVELOPMENT_STEPS, type DevelopmentStep } from "@/lib/development-steps";
 import { HOMEPAGE_PREVIEWS } from "@/lib/site-config";
-import { PLACEHOLDER_TESTIMONIALS } from "@/lib/testimonials";
+
+const STEP_ACCENT_CLASSES: Record<DevelopmentStep["accent"], string> = {
+  teal: "border-teal",
+  mint: "border-mint",
+  navy: "border-navy",
+};
 
 /**
- * Homepage prototype — see docs/WEBSITE_REQUIREMENTS.md.
+ * Homepage — grounded in docs/CONTENT_SOURCES.md, the project's traced
+ * scientific source of truth. Every statistic and status claim below is
+ * taken from that document; nothing here is invented or extrapolated.
  *
- * Introductory copy throughout this page is a first draft, not
- * Chris-approved final wording (open question in §18). Content flagged
- * "PLACEHOLDER" is also factually unfilled (no real figures, quotes, or
- * photography exist yet) and must not be treated as real data.
+ * Two kinds of number appear on this page and must stay visually and
+ * verbally distinct:
+ *  - ResearchMetrics: findings from earlier/background research (PROCEED,
+ *    Veal 2024) that explain why COS-D is needed.
+ *  - ParticipationStat: current COS-D participation — deliberately empty
+ *    until Chris confirms the Step 2 survey is open and supplies a real
+ *    figure. Never backfilled with PROCEED or recruitment-target numbers.
+ *
+ * Terminology note: Veal et al. 2026 (the current protocol) says "carers";
+ * Chevance et al. 2020 (PROCEED, background) says "informal caregivers".
+ * This page uses "carers" for the current project and "informal
+ * caregivers" only when describing PROCEED specifically — final wording
+ * still TODO: confirm with Chris (CONTENT_SOURCES.md §1).
  */
 export default function Home() {
   return (
     <>
-      {/* Arrival — identity, short intro, primary CTA. */}
+      {/* 1. What is this project? */}
       <section className="border-b border-border bg-paper-alt">
         <div className="mx-auto flex max-w-wide flex-col gap-composition-gap px-4 py-8 sm:px-6 sm:py-14 lg:grid lg:grid-cols-[1.3fr_1fr] lg:items-center lg:py-20">
           <div>
@@ -30,11 +47,12 @@ export default function Home() {
             <h1 className="mt-2 max-w-2xl text-display font-bold tracking-tight text-ink">
               Deciding together what matters in depression care
             </h1>
-            {/* Draft intro copy — pending Chris's final wording. */}
             <p className="mt-4 max-w-2xl text-lead leading-relaxed text-ink-muted sm:mt-5">
-              COS-D brings people with depression, healthcare professionals, and
-              informal caregivers together to agree on what should be measured
-              in depression research and care.
+              COS-D is working out which outcomes should always be measured in
+              depression research — the things that matter most to people
+              living with depression, their carers, and healthcare
+              professionals — so that different studies can be fairly
+              compared.
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-3 sm:mt-8">
               <SurveyButton />
@@ -55,7 +73,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Understand what COS-D is, and why it matters. */}
+      {/* 2. Why is a Core Outcome Set needed? */}
       <Section id="what-is-cos-d" width="default">
         <div className="2xl:grid 2xl:grid-cols-2 2xl:items-start 2xl:gap-[clamp(4rem,-1.8182rem+6.0606vw,5rem)]">
           <div>
@@ -64,29 +82,99 @@ export default function Home() {
               What is COS-D?
             </h2>
             <p className="mt-4 max-w-3xl text-lead leading-relaxed text-ink-muted">
-              COS-D — a Core Outcome Set for Depression — is a research study
-              working out which outcomes should be measured in depression
-              research and care: the things that actually change for someone.
-              It draws on the experience of people with depression, the
-              expertise of healthcare professionals, and the perspective of
-              informal caregivers.
+              COS-D — a Core Outcome Set for Depression — is a research
+              project working out which outcomes should be measured in every
+              study of depression treatment: <em>what</em> to measure (such
+              as mood, ability to work, or social isolation) and{" "}
+              <em>how</em> to measure it (which questionnaire or scale to
+              use). It&apos;s being developed with people who have
+              depression, their carers, and healthcare professionals — not
+              decided for them.
             </p>
           </div>
 
           <div className="mt-10 2xl:mt-0 2xl:pt-14">
             <h3 className="text-subheading font-semibold text-ink">Why it matters</h3>
             <p className="mt-3 max-w-3xl text-lead leading-relaxed text-ink-muted">
-              Studies and services don&apos;t always measure the same things,
-              which makes it hard to compare results or know what really
-              helps. Agreeing on a shared set of outcomes makes depression
-              research and care easier to compare, combine, and improve — for
-              everyone involved.
+              Depression trials often measure different things, in different
+              ways — and frequently miss what patients themselves say matters
+              most. That makes it hard to know which treatments really work,
+              or to combine results across studies. Agreeing on a shared set
+              of outcomes makes depression research easier to compare,
+              combine, and improve — for everyone involved.
             </p>
           </div>
         </div>
       </Section>
 
-      {/* Accessible explanation of the study, via the three groups it involves. */}
+      {/* 3. What has previous research shown? */}
+      <Section width="wide" divider>
+        <h2 className="text-heading font-bold tracking-tight text-ink">
+          Why this research is needed
+        </h2>
+        <p className="mt-3 max-w-3xl text-lead leading-relaxed text-ink-muted">
+          Two pieces of research make the case for COS-D: a large survey of
+          people affected by depression, and a review of how depression
+          trials actually measure outcomes. This is the evidence behind the
+          project — not participation in COS-D itself.
+        </p>
+
+        <div className="mt-10">
+          <ResearchMetrics />
+        </div>
+
+        <p className="mt-6 max-w-3xl text-xs text-ink-muted/80">
+          These figures describe earlier research (the PROCEED study and a
+          systematic review of depression trials) that led to COS-D. They are
+          not current COS-D participation figures — see below for where the
+          project stands today.
+        </p>
+      </Section>
+
+      {/* 4 & 6. How is the Core Outcome Set being developed, and where is
+          the project currently? Combined into one status section so the
+          "how" and the "where" stay next to each other. */}
+      <Section width="wide" divider>
+        <h2 className="text-heading font-bold tracking-tight text-ink">
+          How COS-D is being developed
+        </h2>
+        <p className="mt-3 max-w-3xl text-lead leading-relaxed text-ink-muted">
+          COS-D follows three steps. The first is complete and published; the
+          second has a published plan but hasn&apos;t opened for
+          participation yet; the third hasn&apos;t started.
+        </p>
+
+        <div className="mt-10 grid gap-grid-gap sm:grid-cols-3">
+          {DEVELOPMENT_STEPS.map((step) => (
+            <div
+              key={step.step}
+              className={`border-t-4 pt-5 ${STEP_ACCENT_CLASSES[step.accent]}`}
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                {step.step} · {step.status}
+              </p>
+              <h3 className="mt-2 text-subheading font-semibold text-ink">
+                {step.title}
+              </h3>
+              <p className="mt-2 text-body leading-relaxed text-ink-muted">
+                {step.description}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-8 max-w-3xl text-body leading-relaxed text-ink-muted">
+          The process is overseen by a steering committee of 14 people,
+          including three with lived experience of depression, who are
+          co-authors of the study protocol.
+        </p>
+
+        <div className="mt-10 border-t border-border pt-8">
+          <ParticipationStat />
+        </div>
+      </Section>
+
+      {/* 5. Who contributes to the process? */}
       <Section width="wide" divider>
         <h2 className="text-heading font-bold tracking-tight text-ink">
           Who&apos;s involved
@@ -115,73 +203,21 @@ export default function Home() {
               what&apos;s realistic to measure.
             </p>
           </div>
+          {/* Terminology TODO: Veal et al. 2026 (the current protocol) says
+              "carers"; Chevance et al. 2020 (PROCEED, background) says
+              "informal caregivers". Using "carers" here as it describes the
+              current project — confirm final preference with Chris. */}
           <div className="border-t-4 border-navy pt-5">
-            <h3 className="text-subheading font-semibold text-ink">
-              Informal caregivers
-            </h3>
+            <h3 className="text-subheading font-semibold text-ink">Carers</h3>
             <p className="mt-2 text-body leading-relaxed text-ink-muted">
-              The perspective of family and friends who support someone
-              through depression.
+              The perspective of family, partners, or friends who support
+              someone through depression.
             </p>
           </div>
         </div>
       </Section>
 
-      {/* Visual break + participation/community statistic. */}
-      <Section width="wide" divider>
-        <div className="flex flex-col gap-composition-gap-lg md:flex-row md:items-center">
-          <div className="md:w-1/2">
-            <PlaceholderImage
-              label="A promotional image supporting participation will go here."
-              aspect="aspect-[4/3]"
-            />
-          </div>
-          <div className="md:w-1/2">
-            <h2 className="text-heading font-bold tracking-tight text-ink">
-              COS-D is growing
-            </h2>
-            <p className="mt-3 max-w-md text-lead leading-relaxed text-ink-muted">
-              Every response helps build a clearer, shared picture of what
-              matters in depression care.
-            </p>
-            <div className="mt-8">
-              <ParticipationStat />
-            </div>
-          </div>
-        </div>
-      </Section>
-
-      {/* Testimonials / community preview. */}
-      <Section width="wide" divider>
-        <h2 className="text-heading font-bold tracking-tight text-ink">
-          In their own words
-        </h2>
-        <p className="mt-3 max-w-3xl text-lead leading-relaxed text-ink-muted">
-          Reflections from people taking part in COS-D.
-        </p>
-        {/* Sample placeholder quotes — see src/lib/testimonials.ts. */}
-        <div className="mt-10 grid gap-grid-gap sm:grid-cols-3">
-          {PLACEHOLDER_TESTIMONIALS.map((testimonial) => (
-            <TestimonialCard
-              key={testimonial.role}
-              quote={testimonial.quote}
-              role={testimonial.role}
-              accent={testimonial.accent}
-            />
-          ))}
-        </div>
-        <p className="mt-6 text-xs text-ink-muted/80">
-          Placeholder quotes shown for layout only — to be replaced with real,
-          consented testimonials.
-        </p>
-      </Section>
-
-      {/* Previews of deeper site content, to encourage exploration. On
-          desktop this reads as a section masthead (title + intro) beside a
-          numbered index of destinations, rather than a single narrow column
-          — see docs/STYLING_AWARD.md on avoiding "tiny content islands on
-          large screens". Below xl it collapses to the original simple
-          stacked list, which already works well on mobile/tablet. */}
+      {/* 7. Where to learn more. */}
       <Section width="wide" divider>
         <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] xl:items-start xl:gap-x-[clamp(3rem,-1.5rem+9vw,6rem)]">
           <div>
@@ -206,18 +242,25 @@ export default function Home() {
         </div>
       </Section>
 
-      {/* Final survey CTA. */}
+      {/* Final CTA — honest about the survey not being open yet. */}
       <section className="bg-navy">
         <div className="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6 sm:py-20">
           <h2 className="text-[clamp(1.875rem,1.3636rem+2.0455vw,3rem)] font-bold tracking-tight text-paper">
-            Ready to take part?
+            Want to take part?
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-body leading-relaxed text-paper/80">
-            Share your perspective — it will help shape what gets measured in
-            future depression research and care.
+            The next stage of COS-D — open to people with depression, their
+            carers, and healthcare professionals — hasn&apos;t opened yet.
+            When it does, this button will take you straight to it.
           </p>
-          <div className="mt-8 flex justify-center">
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
             <SurveyButton />
+            <a
+              href="/study"
+              className="btn border-paper/40 bg-transparent text-paper hover:bg-paper hover:text-navy"
+            >
+              Read more about the study
+            </a>
           </div>
         </div>
       </section>

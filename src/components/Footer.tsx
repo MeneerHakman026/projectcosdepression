@@ -1,25 +1,24 @@
 import Image from "next/image";
 import Link from "next/link";
-import SurveyButton from "./SurveyButton";
 import { FOOTER_NAV, SITE_FULL_NAME, SITE_NAME } from "@/lib/site-config";
 
 export default function Footer() {
   return (
     <footer className="border-t border-border bg-paper-alt">
-      <div className="mx-auto grid max-w-wide gap-8 px-gutter py-composition-gap md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-grid-gap">
-        <Link href="/" className="md:justify-self-start">
+      <div className="mx-auto flex max-w-wide flex-col gap-10 px-gutter py-composition-gap md:flex-row md:items-start md:justify-between md:gap-grid-gap">
+        <Link href="/" className="shrink-0">
           <Image
             src="/cos-d-logo.png"
             alt={`${SITE_NAME} logo`}
             width={460}
             height={200}
-            className="h-12 w-auto sm:h-14 md:h-logo-h mix-blend-multiply"
+            className="h-12 w-auto sm:h-14 md:h-[calc(var(--spacing-logo-h)*1.4)] mix-blend-multiply"
           />
         </Link>
 
         <nav
           aria-label="Footer"
-          className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm md:flex md:flex-wrap md:justify-self-center md:justify-center md:gap-x-nav-gap md:gap-y-2"
+          className="flex flex-col gap-y-3 text-sm md:grid md:auto-cols-max md:grid-flow-col md:grid-rows-4 md:gap-x-12 md:gap-y-3"
         >
           {FOOTER_NAV.map((link) => (
             <Link
@@ -31,12 +30,6 @@ export default function Footer() {
             </Link>
           ))}
         </nav>
-
-        <SurveyButton
-          variant="secondary"
-          compact
-          className="w-full md:w-auto md:justify-self-end"
-        />
       </div>
 
       <div className="border-t border-border">
