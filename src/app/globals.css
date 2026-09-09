@@ -1,26 +1,137 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+
+  /* COS-D brand palette, from docs/COS_Website_VibeGuide.pptx. Kept as raw
+     values so the @theme tokens below don't reference themselves. */
+  --teal: #4f9aa7;
+  --mint: #9fd0c2;
+  --navy: #1c2c43;
+
+  /* Raw brand teal fails WCAG AA contrast as text/button fill on white
+     (~3.2:1), so interactive text/fills use this deepened shade instead.
+     Raw --teal stays available for decorative, non-text use. */
+  --teal-deep: #3f7d88;
+
+  --paper: #ffffff;
+  --paper-alt: #f4f8f7;
+  --ink: var(--navy);
+  --ink-muted: #56677a;
+  --border: #dde3e6;
+  --accent: var(--teal-deep);
+  --accent-hover: var(--navy);
+  --accent-soft: var(--mint);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* Extra breakpoints for large/ultrawide monitors, beyond Tailwind's
+     built-in scale (which tops out at 2xl/1536px). Used sparingly to widen
+     containers and rebalance the hero on very large viewports — normal
+     desktop (up to 2xl) is untouched. */
+  --breakpoint-3xl: 1800px;
+  --breakpoint-4xl: 2560px;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-paper: var(--paper);
+  --color-paper-alt: var(--paper-alt);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-navy: var(--navy);
+  --color-teal: var(--teal);
+  --color-mint: var(--mint);
+
+  --font-sans: var(--font-inter);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-navy);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* Keeps in-page anchor links (e.g. the hero's "Learn what this means")
+   from landing a heading underneath the sticky header. */
+section[id] {
+  scroll-margin-top: 5rem;
+}
+
+/* Component classes live in Tailwind's `components` layer, which the
+   `utilities` layer always wins against regardless of source order. Without
+   this, a fixed `display`/`padding` here would permanently defeat utilities
+   like `hidden` or `sm:inline-flex` applied alongside these classes. */
+@layer components {
+  /* Visually hidden until focused, for the "skip to content" link. */
+  .skip-link {
+    position: absolute;
+    top: -3rem;
+    left: 1rem;
+    z-index: 50;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    padding: 0.5rem 1rem;
+    border-radius: 2px;
+    transition: top 0.15s ease;
+  }
+
+  .skip-link:focus {
+    top: 1rem;
+  }
+
+  /* Base button. Secondary style by default: outlined, inverts on hover. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+    border: 1px solid var(--color-ink);
+    padding: 0.625rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+    color: var(--color-ink);
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease,
+      border-color 0.15s ease;
+  }
+
+  .btn:hover {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+
+  /* Smaller footprint, e.g. for the header on small mobile viewports. */
+  .btn-compact {
+    padding: 0.5rem 1rem;
+    font-size: 0.8125rem;
+  }
+
+  /* Primary button: filled with the (text-safe) accent colour. Used for the
+     "Take the survey" call-to-action. */
+  .btn-primary {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    color: var(--color-paper);
+  }
+
+  .btn-primary:hover,
+  .btn-primary:focus-visible {
+    background: var(--color-accent-hover);
+    border-color: var(--color-accent-hover);
+  }
 }
