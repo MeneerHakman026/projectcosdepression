@@ -7,20 +7,20 @@ import { PRIMARY_NAV, SITE_NAME } from "@/lib/site-config";
 export default function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-paper">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 3xl:max-w-7xl 4xl:max-w-[100rem]">
-        <Link href="/" className="shrink-0">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-header-y sm:px-gutter-header">
+        <Link href="/" className="shrink-0 justify-self-start">
           <Image
-            src="/cos-d-logo.png"
+            src="/cos-d-logo-mark.png"
             alt={`${SITE_NAME} logo`}
-            width={1150}
-            height={500}
+            width={460}
+            height={200}
             priority
-            className="h-9 w-auto mix-blend-multiply sm:h-10"
+            className="h-10 w-auto sm:h-11 md:h-12 xl:h-logo-h"
           />
         </Link>
 
-        <nav aria-label="Primary" className="hidden lg:block">
-          <ul className="flex items-center gap-7 text-sm font-medium">
+        <nav aria-label="Primary" className="hidden justify-self-center lg:block">
+          <ul className="flex items-center gap-nav-gap text-body font-medium">
             {PRIMARY_NAV.map((link) => (
               <li key={link.href}>
                 <Link
@@ -34,7 +34,7 @@ export default function Header() {
           </ul>
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-self-end gap-2">
           <SurveyButton compact className="sm:hidden">
             Survey
           </SurveyButton>
