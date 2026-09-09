@@ -1,5 +1,5 @@
+import Image from "next/image";
 import ParticipationStat from "@/components/ParticipationStat";
-import PlaceholderImage from "@/components/PlaceholderImage";
 import PreviewLink from "@/components/PreviewLink";
 import ResearchMetrics from "@/components/ResearchMetrics";
 import Section from "@/components/Section";
@@ -64,10 +64,14 @@ export default function Home() {
               </a>
             </div>
           </div>
-          <div>
-            <PlaceholderImage
-              label="Photography of study participants or the research team will go here (final image style still to be determined)."
-              aspect="aspect-[16/10] sm:aspect-[4/3]"
+          <div className="relative aspect-[16/10] w-full overflow-hidden sm:aspect-[4/3]">
+            <Image
+              src="/front_photo.png"
+              alt="Three people having a conversation around a table."
+              fill
+              preload
+              sizes="(min-width: 1024px) 40vw, 100vw"
+              className="object-cover object-[50%_35%]"
             />
           </div>
         </div>
