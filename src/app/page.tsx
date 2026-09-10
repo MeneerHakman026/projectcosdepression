@@ -246,16 +246,16 @@ export default function Home() {
         </div>
       </Section>
 
-      {/* Final CTA — honest about the survey not being open yet. */}
+      {/* Final CTA — links through to the expression-of-interest form. */}
       <section className="bg-navy">
         <div className="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6 sm:py-20">
           <h2 className="text-[clamp(1.875rem,1.3636rem+2.0455vw,3rem)] font-bold tracking-tight text-paper">
             Want to take part?
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-body leading-relaxed text-paper/80">
-            The next stage of COS-D — open to people with depression, their
-            carers, and healthcare professionals — hasn&apos;t opened yet.
-            When it does, this button will take you straight to it.
+            The next stage of COS-D is open to people with depression, their
+            carers, and healthcare professionals. Register your interest and
+            we&apos;ll be in touch.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <SurveyButton />

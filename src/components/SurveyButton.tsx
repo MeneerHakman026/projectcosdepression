@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import Link from "next/link";
 import { SURVEY_URL } from "@/lib/site-config";
 
 type SurveyButtonProps = {
@@ -9,13 +10,8 @@ type SurveyButtonProps = {
 };
 
 /**
- * The external survey isn't live yet — SURVEY_URL is still the "#"
- * placeholder in site-config.ts. Until Chris supplies the real URL, every
- * instance of this button (homepage, header, mobile nav) renders as an
- * inert "not yet open" state instead of linking anywhere, so the site never
- * implies a survey exists that a visitor could actually take. Once
- * SURVEY_URL is set to a real address, every instance becomes a working
- * link automatically — no other change needed.
+ * Kept so a future placeholder URL ("#") still degrades to the inert
+ * "not yet open" state instead of rendering a dead link.
  */
 const SURVEY_IS_LIVE = SURVEY_URL !== "#";
 
@@ -34,7 +30,7 @@ export default function SurveyButton({
     .filter(Boolean)
     .join(" ");
 
-  const label = children ?? "Take the survey";
+  const label = children ?? "Expression of interest";
 
   if (!SURVEY_IS_LIVE) {
     return (
@@ -49,8 +45,8 @@ export default function SurveyButton({
   }
 
   return (
-    <a href={SURVEY_URL} className={classes}>
+    <Link href={SURVEY_URL} className={classes}>
       {label}
-    </a>
+    </Link>
   );
 }

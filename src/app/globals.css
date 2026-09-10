@@ -163,7 +163,7 @@ section[id] {
   }
 
   /* Primary button: filled with the (text-safe) accent colour. Used for the
-     "Take the survey" call-to-action. */
+     "Expression of interest" call-to-action. */
   .btn-primary {
     border-color: var(--color-accent);
     background: var(--color-accent);

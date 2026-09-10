@@ -35,12 +35,8 @@ export default function Header() {
         </nav>
 
         <div className="col-start-3 ml-auto flex items-center justify-self-end gap-2">
-          <SurveyButton compact className="sm:hidden">
-            Survey
-          </SurveyButton>
-          <SurveyButton className="hidden sm:inline-flex">
-            Take the survey
-          </SurveyButton>
+          <SurveyButton compact className="sm:hidden" />
+          <SurveyButton className="hidden sm:inline-flex" />
           <MobileNav links={PRIMARY_NAV} />
         </div>
       </div>

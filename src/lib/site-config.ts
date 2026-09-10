@@ -2,10 +2,10 @@ export const SITE_NAME = "COS-D";
 export const SITE_FULL_NAME = "Core Outcome Set for Depression";
 
 /**
- * The study/survey is hosted externally (Chris has not shared the final
- * survey URL yet). Replace this placeholder once it's available.
+ * Expression-of-interest destination for every survey CTA on the site.
+ * Points at the internal /registration page.
  */
-export const SURVEY_URL = "#";
+export const SURVEY_URL: string = "/registration";
 
 export type NavLink = {
   href: string;
