@@ -14,15 +14,38 @@ export default function Footer() {
         {/* Logo + nav in one row, top-aligned so the logo sits level with
             the EXPLORE / PROJECT headings rather than floating above them */}
         <div className="grid grid-cols-1 items-start gap-10 lg:grid-cols-12 lg:gap-x-8">
-          <Link href="/" className="inline-block lg:col-span-4">
-            <Image
-              src="/cos-d-logo.png"
-              alt={`${SITE_NAME} — ${SITE_FULL_NAME}`}
-              width={460}
-              height={200}
-              className="h-[clamp(4rem,2.1rem+6.5vw,9.5rem)] w-auto mix-blend-multiply"
-            />
-          </Link>
+          <div className="lg:col-span-4">
+            <Link href="/" className="inline-block">
+              <Image
+                src="/cos-d-logo.png"
+                alt={`${SITE_NAME} — ${SITE_FULL_NAME}`}
+                width={460}
+                height={200}
+                className="h-[clamp(4rem,2.1rem+6.5vw,9.5rem)] w-auto mix-blend-multiply"
+              />
+            </Link>
+            <a
+              href="https://www.instagram.com/project.cosd"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="COS-D on Instagram"
+              className="mt-3 inline-flex text-ink-muted transition-colors hover:text-brand-teal"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                width="22"
+                height="22"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="5" />
+                <circle cx="12" cy="12" r="4.5" />
+                <circle cx="17.2" cy="6.8" r="0.6" fill="currentColor" stroke="none" />
+              </svg>
+            </a>
+          </div>
 
           <nav
             aria-label="Footer"

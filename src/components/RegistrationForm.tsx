@@ -3,6 +3,7 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
 import { COUNTRIES } from "@/lib/countries";
+import { submitExpressionOfInterest } from "@/app/registration/actions";
 
 const AGE_GROUPS = ["18 to 29", "30 to 39", "40 to 49", "50 to 64", "65+"];
 const LANGUAGES = ["English", "French", "German", "Italian", "Spanish"];
@@ -42,7 +43,8 @@ export default function RegistrationForm() {
   const [preferredLanguage, setPreferredLanguage] = useState("");
   const [consent, setConsent] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
-  const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const firstNameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
@@ -69,7 +71,7 @@ export default function RegistrationForm() {
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const trimmedFirstName = firstName.trim();
@@ -104,33 +106,43 @@ export default function RegistrationForm() {
       return;
     }
 
-    // No network request, storage, or logging: this is a local UI-only
-    // simulation of a successful submission (see AGENTS.md task scope).
-    setSubmitted(true);
-  }
+    setSubmitError(null);
+    setIsSubmitting(true);
 
-  if (submitted) {
-    return (
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-wide text-accent">
-          Expression of Interest
-        </p>
-        <h2 className="mt-3 text-subheading font-semibold text-ink">
-          Thank you for your interest in COS-D.
-        </h2>
-        <p className="mt-4 text-body leading-relaxed text-ink-muted">
-          We&rsquo;ll contact you when the COS-D survey opens.
-        </p>
-        <p className="mt-6">
-          <Link
-            href="/"
-            className="text-ink underline underline-offset-2 hover:text-accent"
-          >
-            Return to the homepage
-          </Link>
-        </p>
-      </div>
-    );
+    try {
+      const result = await submitExpressionOfInterest({
+        firstName: trimmedFirstName,
+        email: trimmedEmail,
+        country,
+        ageGroup,
+        preferredLanguage,
+        consent,
+      });
+
+      if (result.status === "validation_error") {
+        setErrors(result.errors);
+        if (result.errors.firstName) {
+          firstNameRef.current?.focus();
+        } else if (result.errors.email) {
+          emailRef.current?.focus();
+        } else if (result.errors.consent) {
+          consentRef.current?.focus();
+        }
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (result.status === "server_error") {
+        setSubmitError(result.message);
+        setIsSubmitting(false);
+        return;
+      }
+    } catch {
+      setSubmitError(
+        "Something went wrong while submitting your form. Please try again later."
+      );
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -138,6 +150,15 @@ export default function RegistrationForm() {
       <h2 className="text-subheading font-semibold text-ink">
         Expression of interest form
       </h2>
+
+      {submitError && (
+        <p
+          role="alert"
+          className="mt-4 border border-red-600 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          {submitError}
+        </p>
+      )}
 
       <form noValidate onSubmit={handleSubmit} className="mt-6 space-y-8">
         <div className="grid gap-6 sm:grid-cols-2">
@@ -295,8 +316,12 @@ export default function RegistrationForm() {
           )}
         </div>
 
-        <button type="submit" className="btn">
-          Submit expression of interest
+        <button
+          type="submit"
+          className={`btn ${isSubmitting ? "cursor-not-allowed opacity-60" : ""}`}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? "Submitting…" : "Submit expression of interest"}
         </button>
       </form>
     </div>

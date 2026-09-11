@@ -21,6 +21,24 @@ export default function CommunityPage() {
           available.
         </p>
       </Section>
+      <Section width="narrow" divider>
+        <h2 className="text-subheading font-semibold text-ink">
+          Follow us on Instagram
+        </h2>
+        <p className="mt-3 max-w-2xl leading-relaxed text-ink-muted">
+          For updates and behind-the-scenes glimpses of the COS-D community
+          between page updates, follow along on Instagram.
+        </p>
+        <a
+          href="https://www.instagram.com/project.cosd"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="COS-D on Instagram"
+          className="btn btn-primary mt-6"
+        >
+          Follow @project.cosd
+        </a>
+      </Section>
     </>
   );
 }
