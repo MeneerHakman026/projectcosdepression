@@ -1,6 +1,7 @@
 /**
  * Country names for the "Country of residence" field on the Expression of
- * Interest form (src/app/registration/page.tsx). Alphabetical, no grouping.
+ * Interest form (src/components/RegistrationForm.tsx). Alphabetical, no
+ * grouping.
  */
 export const COUNTRIES: string[] = [
   "Afghanistan",
