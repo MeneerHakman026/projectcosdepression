@@ -48,7 +48,7 @@ Apply it in the Neon SQL editor or with `psql "$DATABASE_URL_UNPOOLED" -f db/mig
 ## Rollback
 
 - **Bad content:** open Version history, Restore the last good version, then Publish. Previous versions stay listed.
-- **Emergency (live page wrong, editor unavailable):** `UPDATE cms_pages SET published_content = NULL, published_schema_version = NULL, published_revision_number = NULL, published_draft_version = NULL, published_at = NULL, published_by = NULL WHERE slug = 'home';` This makes `/` fall back to built-in content after the next revalidation or redeploy. No history is lost.
+- **Emergency (live page wrong, editor unavailable):** `UPDATE cms_pages SET published_content = NULL, published_schema_version = NULL, published_revision_number = NULL, published_draft_version = NULL, published_at = NULL, published_by = NULL WHERE slug = 'home';` No history is lost. **Changes made directly in the database don't reach the live site on their own.** The published page stays cached until something invalidates it (verified on a Neon branch). After the SQL, purge the cache: in Vercel go to Project → Settings → Caches → Purge Data Cache, then redeploy. When the admin is reachable, Restore + Publish is always the better route, because it invalidates the cache itself.
 - **Code:** revert the deploy. The previous code doesn't read the CMS tables, and they can stay in place.
 - **Schema:** `DROP TABLE cms_page_revisions; DROP TABLE cms_pages;` This is destructive: it deletes all saved content and history. Only do it if none of that needs to be kept.
 
