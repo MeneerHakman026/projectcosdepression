@@ -22,6 +22,6 @@ export async function loginAdmin(
     return { error: "Incorrect password." };
   }
 
-  await establishAdminSession();
+  await establishAdminSession(String(formData.get("editorName") ?? ""));
   redirect("/admin");
 }

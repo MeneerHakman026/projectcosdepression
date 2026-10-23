@@ -18,6 +18,24 @@ export default function LoginForm() {
       )}
 
       <div>
+        <label htmlFor="editorName" className="block text-sm font-medium text-ink">
+          Your name
+        </label>
+        <p id="editorName-hint" className="mt-1 text-sm text-ink-muted">
+          Shown next to content changes you save or publish.
+        </p>
+        <input
+          id="editorName"
+          name="editorName"
+          type="text"
+          autoComplete="name"
+          maxLength={60}
+          aria-describedby="editorName-hint"
+          className="mt-2 w-full border border-border bg-paper px-4 py-3 text-body text-ink"
+        />
+      </div>
+
+      <div>
         <label htmlFor="password" className="block text-sm font-medium text-ink">
           Password
         </label>

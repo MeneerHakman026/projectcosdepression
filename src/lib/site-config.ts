@@ -33,33 +33,3 @@ export const FOOTER_NAV: NavLink[] = [
   ...PRIMARY_NAV,
   { href: "/contact", label: "Contact" },
 ];
-
-export type PagePreview = NavLink & { description: string };
-
-/**
- * Short "explore more" previews shown on the homepage. Descriptions describe
- * what each page is for, not its (not yet written) content, and can stay
- * accurate once real content lands.
- */
-export const HOMEPAGE_PREVIEWS: PagePreview[] = [
-  {
-    href: "/about",
-    label: "About the project",
-    description: "Who is running COS-D, and how the study came about.",
-  },
-  {
-    href: "/study",
-    label: "Study & FAQs",
-    description: "What taking part involves, and answers to common questions.",
-  },
-  {
-    href: "/dictionary",
-    label: "Depression dictionary",
-    description: "Plain-language explanations of terms used throughout the study.",
-  },
-  {
-    href: "/media",
-    label: "Media & webinars",
-    description: "Videos and webinars related to the project.",
-  },
-];

@@ -3,19 +3,16 @@ import Link from "next/link";
 import { SURVEY_URL } from "@/lib/site-config";
 
 type SurveyButtonProps = {
+  /** Defaults to the site-wide Expression of Interest destination. */
+  href?: string;
   variant?: "primary" | "secondary";
   compact?: boolean;
   className?: string;
   children?: ReactNode;
 };
 
-/**
- * Kept so a future placeholder URL ("#") still degrades to the inert
- * "not yet open" state instead of rendering a dead link.
- */
-const SURVEY_IS_LIVE = SURVEY_URL !== "#";
-
 export default function SurveyButton({
+  href = SURVEY_URL,
   variant = "primary",
   compact = false,
   className = "",
@@ -32,7 +29,9 @@ export default function SurveyButton({
 
   const label = children ?? "Expression of interest";
 
-  if (!SURVEY_IS_LIVE) {
+  // Kept so a placeholder URL ("#") still degrades to the inert "not yet
+  // open" state instead of rendering a dead link.
+  if (href === "#") {
     return (
       <span aria-disabled="true" className={`${classes} cursor-not-allowed opacity-60`}>
         <span aria-hidden="true">{label}</span>
@@ -45,7 +44,7 @@ export default function SurveyButton({
   }
 
   return (
-    <Link href={SURVEY_URL} className={classes}>
+    <Link href={href} className={classes}>
       {label}
     </Link>
   );
