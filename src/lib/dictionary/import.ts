@@ -42,6 +42,8 @@ export type ImportIssue = {
   sheet?: string;
   row?: number;
   outcomeId?: string;
+  /** Field-level checks that the Dataset Explorer also shows per record (so the import preview doesn't repeat them). */
+  kind?: "empty-field" | "characters";
 };
 
 export type SheetPlan = {
@@ -59,6 +61,15 @@ export type ImportAnalysis = {
   /** Languages this import replaces (MASTER_LANGUAGE for the master). */
   replaces: string[];
   proposed: DictionaryContent | null;
+  /**
+   * Exactly what was read, for inspecting before saving — also when the
+   * file has errors: the master rows in sheet order with their Excel row
+   * numbers, and each translation sheet's row number per Variable.
+   */
+  interpreted?: {
+    master: { outcomes: MasterOutcome[]; rowNumbers: number[]; sheet: string } | null;
+    translationRows: Record<string, Record<string, number>>;
+  };
 };
 
 export type AnalyzeOptions = {
@@ -165,6 +176,7 @@ function checkTextQuality(record: SheetRecord, id: string, sheet: string, issues
         sheet,
         row: record.rowNumber,
         outcomeId: id,
+        kind: "characters",
         message: `${FIELD_LABELS[field]} contains a symbol-font character (${privateUse.join(", ")}), often an arrow or bullet pasted from Word. It's imported unchanged but will likely show as an empty box on the website.`,
       });
     }
@@ -174,6 +186,7 @@ function checkTextQuality(record: SheetRecord, id: string, sheet: string, issues
         sheet,
         row: record.rowNumber,
         outcomeId: id,
+        kind: "characters",
         message: `${FIELD_LABELS[field]} contains invisible control characters. They're imported unchanged.`,
       });
     }
@@ -214,12 +227,12 @@ function validateMaster(sheet: string, records: SheetRecord[], options: AnalyzeO
 
     for (const field of ["category", "groupDomain", "outcomeDomain", "definition"] as const) {
       if (v[field].trim() === "") {
-        issues.push({ level: "error", sheet, row: record.rowNumber, outcomeId: id || undefined, message: `${where}: ${FIELD_LABELS[field]} is empty.` });
+        issues.push({ level: "error", sheet, row: record.rowNumber, outcomeId: id || undefined, kind: "empty-field", message: `${where}: ${FIELD_LABELS[field]} is empty.` });
       }
     }
     for (const field of ["experience", "verbatims"] as const) {
       if (v[field].trim() === "") {
-        issues.push({ level: "warning", sheet, row: record.rowNumber, outcomeId: id || undefined, message: `${where}: ${FIELD_LABELS[field]} is empty.` });
+        issues.push({ level: "warning", sheet, row: record.rowNumber, outcomeId: id || undefined, kind: "empty-field", message: `${where}: ${FIELD_LABELS[field]} is empty.` });
       }
     }
     checkTextQuality(record, id, sheet, issues);
@@ -518,9 +531,21 @@ export function analyzeImport(sheets: RawSheet[], options: AnalyzeOptions, base:
     if (translation) importedTranslations[entry.language] = translation;
   }
 
+  const interpreted: ImportAnalysis["interpreted"] = {
+    master:
+      masterSheet && newMaster
+        ? { outcomes: newMaster, rowNumbers: masterSheet.records.map((record) => record.rowNumber), sheet: masterSheet.sheet.name }
+        : null,
+    translationRows: Object.fromEntries(
+      data
+        .filter((entry) => entry.language && entry.language !== MASTER_LANGUAGE)
+        .map((entry) => [entry.language!, Object.fromEntries(entry.records.map((record) => [record.values.id.trim(), record.rowNumber]))])
+    ),
+  };
+
   const ok = !issues.some((issue) => issue.level === "error");
   const replaces = [...(newMaster ? [MASTER_LANGUAGE] : []), ...Object.keys(importedTranslations)];
-  if (!ok) return { ok, issues, sheets: plans, replaces, proposed: null };
+  if (!ok) return { ok, issues, sheets: plans, replaces, proposed: null, interpreted };
 
   const translations: Record<string, LanguageTranslation> = {};
   for (const [language, translation] of Object.entries(base.translations)) {
@@ -561,5 +586,5 @@ export function analyzeImport(sheets: RawSheet[], options: AnalyzeOptions, base:
     }
   }
 
-  return { ok, issues, sheets: plans, replaces, proposed };
+  return { ok, issues, sheets: plans, replaces, proposed, interpreted };
 }

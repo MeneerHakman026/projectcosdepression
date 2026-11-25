@@ -38,7 +38,7 @@ export default async function AdminContentPage() {
       ) : (
         <>
           <h2 className="mt-10 text-subheading font-semibold text-ink">Pages</h2>
-          <div className="mt-4 overflow-x-auto border border-border">
+          <div className="relative mt-4 overflow-x-auto border border-border">
             <table className="w-full min-w-[720px] border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-border bg-paper-alt">

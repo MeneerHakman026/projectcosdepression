@@ -2,10 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import type { UploadResponse } from "@/app/admin/(protected)/content/dictionary/import/upload/route";
+import type { RecordNote } from "@/lib/dictionary/explorer";
 import type { ImportIssue } from "@/lib/dictionary/import";
-import type { ImportPreview } from "@/lib/dictionary/pipeline";
+import { languageName } from "@/lib/dictionary/languages";
+import { MASTER_LANGUAGE } from "@/lib/dictionary/model";
+import type { ImportInspection, ImportPreview } from "@/lib/dictionary/pipeline";
+import { categoryKeyOf, groupKeyOf } from "@/lib/dictionary/taxonomy";
+import DatasetExplorer from "./DatasetExplorer";
 import DiffView, { Alerts } from "./DiffView";
 
 type LanguageOption = { code: string; name: string };
@@ -14,6 +19,8 @@ type ImportWizardProps = {
   languages: LanguageOption[];
   maxBytes: number;
   hasDraft: boolean;
+  /** Participant-group abbreviations, to explain how Verbatims will display. */
+  roleCodes: string[];
 };
 
 type Phase = "idle" | "checking" | "preview" | "saving" | "saved";
@@ -48,7 +55,97 @@ function IssueGroup({ level, issues, title, open }: { level: ImportIssue["level"
   );
 }
 
-export default function ImportWizard({ languages, maxBytes, hasDraft }: ImportWizardProps) {
+/** Import issues attached to the records they're about (by Variable, or by Excel row in the inspected sheet). */
+function notesByRecord(inspect: ImportInspection, issues: ImportIssue[]): Record<number, RecordNote[]> {
+  const notes: Record<number, RecordNote[]> = {};
+  for (const issue of issues) {
+    // Empty fields and odd characters are shown by the explorer itself.
+    if (issue.kind) continue;
+    let indexes: number[] = [];
+    if (issue.outcomeId && (!issue.sheet || issue.sheet === inspect.sheet)) {
+      indexes = inspect.outcomes.flatMap((outcome, index) => (outcome.id.trim() === issue.outcomeId ? [index] : []));
+    } else if (issue.row && issue.sheet === inspect.sheet) {
+      indexes = inspect.rowNumbers.flatMap((row, index) => (row === issue.row ? [index] : []));
+    }
+    for (const index of indexes) (notes[index] ??= []).push({ level: issue.level, message: issue.message });
+  }
+  return notes;
+}
+
+function SummaryItem({ label, value, tone }: { label: string; value: string | number; tone?: "warning" | "error" }) {
+  return (
+    <div className={`border px-3 py-2 ${tone === "error" ? "border-red-700 bg-red-50" : tone === "warning" ? "border-amber-600 bg-amber-50" : "border-border bg-paper"}`}>
+      <dt className="text-xs text-ink-muted">{label}</dt>
+      <dd className="text-subheading font-semibold tabular-nums text-ink">{value}</dd>
+    </div>
+  );
+}
+
+function ImportSummary({ preview }: { preview: ImportPreview }) {
+  const inspect = preview.inspect!;
+  const language = inspect.language;
+  const isMaster = language === MASTER_LANGUAGE;
+  const outcomes = inspect.outcomes;
+  const records = isMaster ? outcomes.length : Object.keys(inspect.translations[language]?.outcomes ?? {}).length;
+  const categories = new Set(outcomes.map((o) => categoryKeyOf(o.category))).size;
+  const groups = new Set(outcomes.map((o) => groupKeyOf(o.category, o.groupDomain))).size;
+  const errors = preview.issues.filter((i) => i.level === "error").length;
+  const warnings = preview.issues.filter((i) => i.level === "warning").length;
+
+  let changes: { added: number; modified: number; removed: number; unchanged: number } | null = null;
+  if (preview.diff) {
+    if (isMaster) {
+      const o = preview.diff.outcomes;
+      changes = { added: o.added.length, modified: o.modified.length, removed: o.removed.length, unchanged: o.unchanged };
+    } else {
+      const t = preview.diff.translations.find((entry) => entry.language === language);
+      if (t) {
+        changes = {
+          added: t.added.length,
+          modified: t.modified.length,
+          removed: t.removed.length,
+          unchanged: Math.max(0, t.after - t.added.length - t.modified.length),
+        };
+      }
+    }
+  }
+  const noun = isMaster ? "records" : "translated records";
+
+  return (
+    <section aria-labelledby="import-summary" className="border border-border bg-paper-alt p-4">
+      <h3 id="import-summary" className="text-body font-semibold text-ink">
+        Import summary
+      </h3>
+      <p className="mt-1 text-sm text-ink-muted">
+        {isMaster ? "English master" : `${languageName(language)} (${language}) translation`}
+        {inspect.sheet ? ` · sheet “${inspect.sheet}”` : ""}
+        {inspect.partial ? " · as read from the file — it has errors, so it can't be saved" : ""}
+      </p>
+      <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-5">
+        <SummaryItem label={isMaster ? "Records (outcomes)" : "Translated records"} value={records} />
+        <SummaryItem label="Categories" value={categories} />
+        <SummaryItem label="Group domains" value={groups} />
+        <SummaryItem label="Errors" value={errors} tone={errors ? "error" : undefined} />
+        <SummaryItem label="Warnings" value={warnings} tone={warnings ? "warning" : undefined} />
+      </dl>
+      {changes && (
+        <>
+          <p className="mt-4 text-sm font-semibold text-ink">
+            Compared with the live dictionary{preview.diff && preview.diff.before.outcomes === 0 ? " (nothing is published yet, so everything is new)" : ""}:
+          </p>
+          <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <SummaryItem label={`Added ${noun}`} value={changes.added} />
+            <SummaryItem label={`Modified ${noun}`} value={changes.modified} />
+            <SummaryItem label={`Removed ${noun}`} value={changes.removed} tone={changes.removed ? "warning" : undefined} />
+            <SummaryItem label={`Unchanged ${noun}`} value={changes.unchanged} />
+          </dl>
+        </>
+      )}
+    </section>
+  );
+}
+
+export default function ImportWizard({ languages, maxBytes, hasDraft, roleCodes }: ImportWizardProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [file, setFile] = useState<File | null>(null);
@@ -151,6 +248,12 @@ export default function ImportWizard({ languages, maxBytes, hasDraft }: ImportWi
   const infos = issues.filter((i) => i.level === "info");
   const canSave =
     phase === "preview" && preview?.ok && !preview.unchanged && (!preview.needsAcknowledgement || acknowledged);
+  const inspect = preview?.inspect ?? null;
+  const recordNotes = useMemo(() => (preview?.inspect ? notesByRecord(preview.inspect, preview.issues) : {}), [preview]);
+  const inspectDataset = useMemo(
+    () => (inspect ? { outcomes: inspect.outcomes, translations: inspect.translations, rowNumbers: inspect.rowNumbers } : null),
+    [inspect]
+  );
 
   return (
     <div className="space-y-8">
@@ -280,7 +383,7 @@ export default function ImportWizard({ languages, maxBytes, hasDraft }: ImportWi
           </div>
 
           {preview.sheets.length > 0 && (
-            <div className="overflow-x-auto border border-border bg-paper">
+            <div className="relative overflow-x-auto border border-border bg-paper">
               <table className="w-full text-left text-sm">
                 <caption className="sr-only">How each sheet is read</caption>
                 <thead className="bg-paper-alt">
@@ -309,11 +412,38 @@ export default function ImportWizard({ languages, maxBytes, hasDraft }: ImportWi
             </div>
           )}
 
+          {inspect && <ImportSummary preview={preview} />}
+
           <div className="space-y-2">
             <IssueGroup level="error" issues={errors} title="Errors — must be fixed" open />
             <IssueGroup level="warning" issues={warnings} title="Warnings — check before saving" open={warnings.length <= 8} />
             <IssueGroup level="info" issues={infos} title="Notes" />
           </div>
+
+          {inspect && inspectDataset && (
+            <section aria-labelledby="import-inspect" className="border border-border bg-paper p-4">
+              <h3 id="import-inspect" className="text-body font-semibold text-ink">
+                Inspect imported data
+              </h3>
+              <p className="mt-1 max-w-3xl text-sm text-ink-muted">
+                Every record exactly as it was read from the workbook. Choose a record to see all seven columns, including the
+                full quotations. Nothing has been saved.
+                {inspect.partial && " This file has errors, so it can't be saved: fix them in Excel and check the file again."}
+              </p>
+              <div className="mt-4">
+                <DatasetExplorer
+                  key={`${preview.file.sha256}-${inspect.language}`}
+                  dataset={inspectDataset}
+                  roleCodes={roleCodes}
+                  notes={recordNotes}
+                  datasetLabel={`Read from “${preview.file.name}” — not saved${inspect.partial ? " (the file has errors)" : ""}`}
+                  datasetTone="draft"
+                  initial={{ language: inspect.language }}
+                  showRowNumbers
+                />
+              </div>
+            </section>
+          )}
 
           {preview.ok && preview.diff && (
             <>

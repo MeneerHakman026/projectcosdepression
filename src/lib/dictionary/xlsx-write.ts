@@ -221,3 +221,107 @@ export async function exportTranslationTemplate(
   ]);
   return toBytes(workbook);
 }
+
+/** What each master column is for: shown in the blank template's Instructions sheet and as header notes. */
+export const COLUMN_GUIDE: Record<MasterField, { required: string; text: string }> = {
+  id: {
+    required: "Required",
+    text:
+      "The permanent ID of the outcome, for example V_01. Letters, numbers, “_”, “-” and “.” only (up to 64 characters), and every row needs a different ID. Never change or reuse an ID once it has been published: translations and links to the outcome depend on it.",
+  },
+  category: {
+    required: "Required",
+    text: "The top-level category the outcome belongs to. Type it identically on every row of the same category.",
+  },
+  groupDomain: {
+    required: "Required",
+    text: "The group domain within that category. Type it identically on every row of the same group domain.",
+  },
+  outcomeDomain: { required: "Required", text: "The name of the outcome, as shown on the website." },
+  definition: { required: "Required", text: "The definition of the outcome." },
+  experience: { required: "Recommended (a warning is shown if empty)", text: "How the outcome is experienced." },
+  verbatims: {
+    required: "Recommended (a warning is shown if empty)",
+    text:
+      "Participant quotations, exactly as recorded. Start each participant group on a new line inside the cell with its abbreviation and a colon, for example: PwD: “…”",
+  },
+};
+
+export type TemplateRole = { code: string; label: string };
+
+/**
+ * The blank English master template: an Instructions sheet and an empty
+ * "en" sheet with the seven column headers. No data rows, so nothing in it
+ * could be mistaken for research content. Every cell of the data sheet is
+ * formatted as Text, so whatever is typed is kept exactly (IDs such as 01
+ * aren't turned into numbers, "=" isn't treated as a formula).
+ */
+export async function exportBlankTemplate(meta: { exportedAt: Date; roles: TemplateRole[] }): Promise<Uint8Array> {
+  const workbook = newWorkbook();
+
+  const guide = workbook.addWorksheet("Instructions");
+  guide.getColumn(1).width = 120;
+  const lines: { text: string; style?: "title" | "heading" | "column" }[] = [
+    { text: "COS-D Outcome Dictionary — Excel template", style: "title" },
+    { text: `Blank English master template · downloaded ${meta.exportedAt.toISOString().slice(0, 16).replace("T", " ")} UTC` },
+    { text: "" },
+    { text: "How this workbook works", style: "heading" },
+    { text: "• Fill in the sheet “en” (English). Each row is one outcome. Keep the first row — the seven column headers — exactly as it is." },
+    { text: "• The structure is Category → Group Domain → Outcome Domain: every outcome belongs to one group domain, and every group domain to one category." },
+    { text: "• Categories and group domains aren't set up anywhere else: the website builds them from the Category and Group Domain columns. Each different Category becomes a category, and each different Group Domain within it a group domain." },
+    { text: "• Outcomes are shown in the order of the rows." },
+    { text: "• Importing the finished workbook replaces the whole English dictionary. It is saved as a draft first, which you can inspect and preview; nothing is public until you publish it." },
+    { text: "" },
+    { text: "The seven columns", style: "heading" },
+    ...COLUMNS.map((column, index) => ({
+      text: `${index + 1}. ${column.header} — ${COLUMN_GUIDE[column.field].required}. ${COLUMN_GUIDE[column.field].text}`,
+      style: "column" as const,
+    })),
+    { text: "" },
+    { text: "Keeping participant quotations exact", style: "heading" },
+    { text: "• Text is imported and shown exactly as typed: quotation marks, punctuation, spaces and line breaks are kept. Don't correct, shorten or paraphrase quotations." },
+    { text: "• Start a new line inside a cell with Alt+Enter (Windows) or Control+Option+Return (Mac)." },
+    { text: "• Put each participant group on its own line, starting with its abbreviation and a colon. The website then shows the quotations grouped by participant; otherwise they're shown exactly as written." },
+    ...(meta.roles.length > 0
+      ? [{ text: `• Participant abbreviations currently set up: ${meta.roles.map((role) => `${role.code} = ${role.label}`).join("; ")}.` }]
+      : []),
+    { text: "• When copying from Word, paste as text only (Paste Special → Text). Symbols from Word fonts may otherwise show as empty boxes on the website; the import warns about them." },
+    { text: "" },
+    { text: "Rules", style: "heading" },
+    { text: "• Enter text only: no formulas and no merged cells. The cells are already formatted as Text." },
+    { text: "• Don't rename the sheet “en” and don't add columns. Other sheets, like this one, are ignored on import." },
+    { text: "• Translations use a different file: once the English dictionary has been imported, download a translation template from Admin → Content → Outcome Dictionary." },
+    { text: "" },
+    { text: "Importing", style: "heading" },
+    { text: "1. Admin → Content → Outcome Dictionary → Import Excel. Choose this file and “English master”, then Check file." },
+    { text: "2. Read the summary and any warnings, and inspect the imported records: every column and quotation is shown exactly as it was read." },
+    { text: "3. Save as draft, preview the draft, and publish when it has been approved." },
+  ];
+  lines.forEach((line, index) => {
+    const cell = guide.getCell(index + 1, 1);
+    cell.value = toExcelText(line.text);
+    cell.numFmt = "@";
+    cell.alignment = { wrapText: true, vertical: "top" };
+    cell.font =
+      line.style === "title"
+        ? { name: "Aptos Narrow", size: 16, bold: true }
+        : line.style === "heading"
+          ? { name: "Aptos Narrow", size: 13, bold: true }
+          : BODY_FONT;
+    guide.getRow(index + 1).height = estimateRowHeight([line.text], [120]) + (line.style === "column" ? 4 : 0);
+  });
+
+  const sheet = workbook.addWorksheet(MASTER_LANGUAGE, { views: [{ state: "frozen", xSplit: 1, ySplit: 1 }] });
+  sheet.columns = COLUMNS.map((column) => ({ width: COLUMN_WIDTHS[column.field], style: { numFmt: "@", alignment: BODY_ALIGNMENT, font: BODY_FONT } }));
+  const header = sheet.getRow(1);
+  COLUMNS.forEach((column, index) => {
+    const cell = header.getCell(index + 1);
+    cell.value = column.header;
+    cell.numFmt = "@";
+    cell.font = HEADER_FONT;
+    cell.alignment = { vertical: "middle" };
+    cell.note = `${column.header} (${COLUMN_GUIDE[column.field].required.split(" (")[0].toLowerCase()}): ${COLUMN_GUIDE[column.field].text}`;
+  });
+  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: COLUMNS.length } };
+  return toBytes(workbook);
+}
