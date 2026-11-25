@@ -2,19 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import CmsNotInstalled from "@/components/admin/cms/CmsNotInstalled";
+import DictionaryPageEditor from "@/components/admin/cms/DictionaryPageEditor";
 import EoiButtonEditor from "@/components/admin/cms/EoiButtonEditor";
 import HomeEditor from "@/components/admin/cms/HomeEditor";
 import RegistrationEditor from "@/components/admin/cms/RegistrationEditor";
+import type { DictionaryPageContent } from "@/content/dictionary/schema";
 import type { EoiButtonContent } from "@/content/eoi-button/schema";
 import type { HomeContent } from "@/content/home/schema";
 import type { RegistrationContent } from "@/content/registration/schema";
 import { editorNameOf, requireAdminSession } from "@/lib/admin/session";
-import { EOI_BUTTON, getPageDefinition, HOME_PAGE, REGISTRATION_PAGE } from "@/lib/cms/pages";
+import { DICTIONARY_PAGE, EOI_BUTTON, getPageDefinition, HOME_PAGE, REGISTRATION_PAGE } from "@/lib/cms/pages";
 import { cms } from "@/lib/cms/server";
 import { CmsNotInstalledError, type PageState } from "@/lib/cms/service";
 import { resolveEoiButton, type EoiButtonLink } from "@/lib/eoi-button";
 
-const EDITABLE = new Set([HOME_PAGE.slug, REGISTRATION_PAGE.slug, EOI_BUTTON.slug]);
+const EDITABLE = new Set([HOME_PAGE.slug, REGISTRATION_PAGE.slug, DICTIONARY_PAGE.slug, EOI_BUTTON.slug]);
 
 export async function generateMetadata({ params }: PageProps<"/admin/content/pages/[slug]">): Promise<Metadata> {
   const { slug } = await params;
@@ -75,6 +77,8 @@ export default async function EditPage({ params }: PageProps<"/admin/content/pag
         <HomeEditor {...editorProps} initialContent={state.content as HomeContent} />
       ) : page.slug === REGISTRATION_PAGE.slug ? (
         <RegistrationEditor {...editorProps} initialContent={state.content as RegistrationContent} />
+      ) : page.slug === DICTIONARY_PAGE.slug ? (
+        <DictionaryPageEditor {...editorProps} initialContent={state.content as DictionaryPageContent} />
       ) : (
         <EoiButtonEditor
           {...editorProps}

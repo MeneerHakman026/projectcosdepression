@@ -6,6 +6,8 @@ import { formatDateTime } from "@/lib/admin/format";
 import { CMS_PAGES, getPageDefinition } from "@/lib/cms/pages";
 import { cms } from "@/lib/cms/server";
 import { CmsNotInstalledError, type PageSummary } from "@/lib/cms/service";
+import { dictionary } from "@/lib/dictionary/server";
+import { DictionaryNotInstalledError, type DictionaryState } from "@/lib/dictionary/service";
 
 export const metadata: Metadata = { title: "Content" };
 
@@ -15,6 +17,12 @@ export default async function AdminContentPage() {
     pages = await cms.listPages(CMS_PAGES);
   } catch (error) {
     if (!(error instanceof CmsNotInstalledError)) throw error;
+  }
+  let dictionaryState: DictionaryState | null = null;
+  try {
+    dictionaryState = await dictionary.getState();
+  } catch (error) {
+    if (!(error instanceof DictionaryNotInstalledError)) throw error;
   }
 
   return (
@@ -98,6 +106,32 @@ export default async function AdminContentPage() {
           </p>
         </>
       )}
+
+      <h2 className="mt-12 text-subheading font-semibold text-ink">Outcome Dictionary</h2>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border border-border bg-paper px-4 py-4">
+        <div className="text-sm">
+          <p className="font-medium text-ink">Dictionary entries (managed with Excel)</p>
+          <p className="mt-1 text-ink-muted">
+            {dictionaryState === null
+              ? "Not set up yet — database migration 003 needs to be applied."
+              : [
+                  dictionaryState.published
+                    ? `Live: version ${dictionaryState.published.number}, ${dictionaryState.published.summary.outcomes} outcomes`
+                    : "Nothing published yet",
+                  dictionaryState.draft ? `unpublished draft: version ${dictionaryState.draft.number}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+          </p>
+        </div>
+        <Link href="/admin/content/dictionary" className="btn btn-compact">
+          Manage dictionary
+        </Link>
+      </div>
+      <p className="mt-2 max-w-2xl text-sm text-ink-muted">
+        Import, export, preview, publish and restore the dictionary data. The wording around it is edited under Pages
+        (&ldquo;Outcome Dictionary page&rdquo;).
+      </p>
     </div>
   );
 }

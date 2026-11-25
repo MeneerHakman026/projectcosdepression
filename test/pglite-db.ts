@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import type { Db } from "@/lib/cms/service";
 
-const MIGRATIONS = ["001_create_eoi_settings.sql", "002_create_cms_pages.sql"];
+const MIGRATIONS = ["001_create_eoi_settings.sql", "002_create_cms_pages.sql", "003_create_dictionary.sql"];
 
 /**
  * A throwaway in-memory Postgres with the real migrations applied, so CMS

@@ -38,6 +38,7 @@ describe("Phase 3 CMS documents (against real Postgres SQL)", () => {
       expect(CMS_PAGES.map((page) => [page.slug, page.path])).toEqual([
         ["home", "/"],
         ["registration", "/registration"],
+        ["dictionary", "/dictionary"],
         ["eoi-button", "/"],
       ]);
     });
@@ -57,6 +58,7 @@ describe("Phase 3 CMS documents (against real Postgres SQL)", () => {
       expect(summaries.map((s) => [s.slug, s.status])).toEqual([
         ["home", "default"],
         ["registration", "default"],
+        ["dictionary", "default"],
         ["eoi-button", "default"],
       ]);
     });

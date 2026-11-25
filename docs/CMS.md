@@ -37,6 +37,9 @@ Editors change page **content** in the admin (Admin → Content). Developers own
 | Homepage | `home` | `/` | `HomeEditor` |
 | Registration | `registration` | `/registration`, `/registration/success` | `RegistrationEditor` |
 | Expression of Interest button | `eoi-button` | Every page (header, mobile menu) and the homepage's two main buttons | `EoiButtonEditor` |
+| Outcome Dictionary page (wording only) | `dictionary` | `/dictionary` and every `/dictionary/<ID>` | `DictionaryPageEditor` |
+
+The Outcome Dictionary's entries aren't CMS content: they're imported from Excel and versioned separately (Content → Outcome Dictionary). See [DICTIONARY.md](DICTIONARY.md).
 
 ### Registration page
 
