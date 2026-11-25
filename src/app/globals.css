@@ -176,3 +176,16 @@ section[id] {
     border-color: var(--color-accent-hover);
   }
 }
+
+/* Outcome Dictionary: a short, quiet fade as a new entry is opened. Used
+   with motion-safe:, so it never runs for prefers-reduced-motion. */
+@keyframes entry-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

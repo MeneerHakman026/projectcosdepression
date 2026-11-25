@@ -27,14 +27,14 @@ export default function DictionaryPageEditor(
         </p>
       </div>
 
-      <SectionPanel path="intro" title="Introduction (top of page)" description="Heading and explanation above the search" defaultOpen>
-        <TextField path="intro.eyebrow" label="Small label above the heading" maxLength={40} />
-        <TextField path="intro.heading" label="Main heading" />
-        <RichTextField path="intro.description" label="Introduction" hint={FORMATTING_HINT} rows={4} />
-      </SectionPanel>
-
-      <SectionPanel path="explorer" title="Category explorer" description="Heading above the category cards">
-        <TextField path="explorer.heading" label="Heading" />
+      <SectionPanel path="intro" title="Heading and introduction" description="The page heading, and the introduction shown in the section at the bottom of the page" defaultOpen>
+        <TextField path="intro.heading" label="Main heading" hint="Shown above the search field." />
+        <RichTextField
+          path="intro.description"
+          label="Introduction"
+          hint={`${FORMATTING_HINT} Shown at the bottom of the page, before the source.`}
+          rows={4}
+        />
       </SectionPanel>
 
       <SectionPanel path="verbatims" title="Participant quotations" description="Heading, note and participant groups">
@@ -56,8 +56,8 @@ export default function DictionaryPageEditor(
         />
       </SectionPanel>
 
-      <SectionPanel path="source" title="Source and about" description="Shown at the bottom of the page">
-        <TextField path="source.heading" label="Heading" />
+      <SectionPanel path="source" title="About and source" description="The section at the bottom of the page: its heading, then the introduction, then this text">
+        <TextField path="source.heading" label="Heading" hint="Heads the section that also holds the introduction." />
         <RichTextField
           path="source.body"
           label="Text"

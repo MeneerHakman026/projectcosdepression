@@ -15,6 +15,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(navigation.search),
   useRouter: () => ({ push: () => {}, refresh: () => {} }),
 }));
+vi.mock("next/font/google", () => ({ Newsreader: () => ({ variable: "font-quote", className: "font-quote" }) }));
 vi.mock("next/link", () => ({
   default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => (
     <a href={href} className={className}>
@@ -31,13 +32,16 @@ beforeAll(async () => {
   source = analyzeImport(read.sheets, { language: "en", roleCodes: ["PwD", "HCP", "ICG"] }, emptyContent()).proposed!;
 });
 
-function render(content: DictionaryContent, options: { path?: string; search?: string; language?: string } = {}) {
+function render(
+  content: DictionaryContent,
+  options: { path?: string; search?: string; language?: string; page?: typeof DICTIONARY_PAGE_DEFAULTS } = {}
+) {
   navigation.pathname = options.path ?? "/dictionary";
   navigation.search = options.search ?? "";
   const view = buildView(content, options.language ?? "en", { number: 3, publishedAt: "2026-11-25T10:00:00.000Z" });
   return renderToStaticMarkup(
     <DictionaryPage
-      content={DICTIONARY_PAGE_DEFAULTS}
+      content={options.page ?? DICTIONARY_PAGE_DEFAULTS}
       view={view}
       basePath="/dictionary"
       urlMode="path"
@@ -49,13 +53,24 @@ function render(content: DictionaryContent, options: { path?: string; search?: s
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/\s+/g, " ");
 
 describe("public Outcome Dictionary page", () => {
-  it("renders the title and counts computed from the data (not hardcoded)", () => {
-    const html = text(render(source));
-    expect(html).toContain("Outcome Dictionary");
-    expect(html).toMatch(/outcome domains 80/);
-    expect(html).toMatch(/categories 2/);
-    expect(html).toMatch(/group domains 9/);
+  it("renders the title and counts computed from the data (not hardcoded), without a hero", () => {
+    const raw = render(source);
+    const html = text(raw);
+    expect(raw).toMatch(/<h1[^>]*>Outcome Dictionary<\/h1>/);
+    expect(html).toContain("80 outcomes in 2 categories");
+    expect(html).toMatch(/All 80/);
+    expect(html).toMatch(/Synthetic symptoms 64 outcomes/);
+    expect(html).toMatch(/Synthetic functioning 16 outcomes/);
+    expect(raw.match(/<h3[^>]*>/g)).toHaveLength(9); // one heading per group domain in the index
+    expect(html).not.toMatch(/outcome domains \d/); // the old statistics block
     expect(html).toContain("Dictionary version 3");
+  });
+
+  it("gives each category its own colour, from its identity", () => {
+    const raw = render(source);
+    expect(raw).toMatch(/--cat-line:#[0-9A-F]{6}/);
+    const lines = new Set([...raw.matchAll(/--cat-line:(#[0-9A-F]{6})/g)].map((m) => m[1]));
+    expect(lines.size).toBe(2);
   });
 
   it("server-renders every outcome as a permanent link", () => {
@@ -73,7 +88,7 @@ describe("public Outcome Dictionary page", () => {
     );
     expect(small).toContain("Only category");
     expect(small).not.toContain("Synthetic symptoms");
-    expect(small).toMatch(/outcome domain 1\b/);
+    expect(small).toContain("1 outcome in 1 category");
   });
 
   it("shows an outcome's full detail at its deep link, with quotations attributed by participant group", () => {
@@ -103,6 +118,28 @@ describe("public Outcome Dictionary page", () => {
   it("filters by group from the URL", () => {
     const visible = text(render(source, { search: "group=group-s1" }));
     expect(visible).toContain("4 outcomes shown");
+  });
+
+  it("ignores the retired Eyebrow and Explorer heading CMS fields (kept only so stored content stays valid)", () => {
+    const page = structuredClone(DICTIONARY_PAGE_DEFAULTS);
+    page.intro.eyebrow = "RETIRED-EYEBROW";
+    page.explorer.heading = "RETIRED-EXPLORER";
+    const html = render(source, { page });
+    expect(html).not.toContain("RETIRED-EYEBROW");
+    expect(html).not.toContain("RETIRED-EXPLORER");
+    expect(html).toBe(render(source));
+  });
+
+  it("never uses more index columns than there is content for", () => {
+    const columnsOf = (html: string) => [...html.matchAll(/class="mt-6 gap-x-12[^"]*"/g)].map((m) => m[0]);
+    // All 9 groups: up to three columns of groups.
+    expect(columnsOf(render(source))[0]).toContain("xl:columns-3");
+    // One group of 4 outcomes: a single column, no empty columns beside it.
+    const one = render(source, { search: "group=group-s1" });
+    expect(columnsOf(one)[0]).not.toContain("columns-");
+    expect(one).not.toMatch(/<ul class="mt-2[^"]*columns-/);
+    // One group of 18 outcomes: the outcomes themselves flow into columns.
+    expect(render(source, { search: "group=group-s2" })).toMatch(/<ul class="mt-2[^"]*xl:columns-3/);
   });
 
   it("never renders workbook text as HTML", () => {

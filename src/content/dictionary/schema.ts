@@ -28,10 +28,12 @@ export const dictionaryPageSchema = z
       description: plainText(300),
     }),
     intro: z.object({
+      /** Retained so stored content stays valid; not shown on the page or in the editor since the Dictionary redesign. */
       eyebrow: plainText(40),
       heading: plainText(140),
       description: richText(800),
     }),
+    /** Retained so stored content stays valid; not shown on the page or in the editor since the Dictionary redesign. */
     explorer: z.object({
       heading: plainText(100),
     }),
