@@ -1,12 +1,6 @@
 export const SITE_NAME = "COS-D";
 export const SITE_FULL_NAME = "Core Outcome Set for Depression";
 
-/**
- * Expression-of-interest destination for every survey CTA on the site.
- * Points at the internal /registration page.
- */
-export const SURVEY_URL: string = "/registration";
-
 export type NavLink = {
   href: string;
   label: string;

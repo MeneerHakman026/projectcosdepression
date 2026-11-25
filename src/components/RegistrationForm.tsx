@@ -2,16 +2,8 @@
 
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
-import { COUNTRIES } from "@/lib/countries";
 import { submitExpressionOfInterest } from "@/app/registration/actions";
-
-const AGE_GROUPS = ["18 to 29", "30 to 39", "40 to 49", "50 to 64", "65+"];
-const LANGUAGES = ["English", "French", "German", "Italian", "Spanish"];
-
-// Standard "good enough" client-side shape check (something@something.tld).
-// Not exhaustive RFC 5322 validation — that would reject or accept the wrong
-// things either way and isn't the goal here.
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { AGE_GROUPS, LANGUAGES, validateSubmission, type SubmissionErrors } from "@/lib/registration/submission";
 
 const fieldClasses =
   "mt-2 w-full border border-border bg-paper px-4 py-3 text-body text-ink";
@@ -29,16 +21,19 @@ const requiredMark = (
   </>
 );
 
-type FormErrors = {
-  firstName?: string;
-  email?: string;
-  consent?: string;
-};
+type FormErrors = SubmissionErrors;
 
-export default function RegistrationForm() {
+/**
+ * The Expression of Interest form. Developer-owned: fields, validation
+ * (lib/registration/submission.ts), the consent statement and storage are
+ * not editable in the CMS. Only the heading above it comes from content.
+ *
+ * `previewOnly` (admin preview) shows the form but never submits it, so
+ * previewing the page can't create a real Expression of Interest.
+ */
+export default function RegistrationForm({ heading, previewOnly = false }: { heading: string; previewOnly?: boolean }) {
   const [firstName, setFirstName] = useState("");
   const [email, setEmail] = useState("");
-  const [country, setCountry] = useState("");
   const [ageGroup, setAgeGroup] = useState("");
   const [preferredLanguage, setPreferredLanguage] = useState("");
   const [consent, setConsent] = useState(false);
@@ -74,22 +69,9 @@ export default function RegistrationForm() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const trimmedFirstName = firstName.trim();
-    const trimmedEmail = email.trim();
-
-    const nextErrors: FormErrors = {};
-    if (!trimmedFirstName) {
-      nextErrors.firstName = "Enter your first name.";
-    }
-    if (!trimmedEmail) {
-      nextErrors.email = "Enter your email address.";
-    } else if (!EMAIL_PATTERN.test(trimmedEmail)) {
-      nextErrors.email = "Enter a valid email address.";
-    }
-    if (!consent) {
-      nextErrors.consent =
-        "Please confirm that you have read and understood the Privacy Policy.";
-    }
+    const input = { firstName, email, ageGroup, preferredLanguage, consent };
+    const checked = validateSubmission(input);
+    const nextErrors: FormErrors = checked.ok ? {} : checked.errors;
 
     setErrors(nextErrors);
 
@@ -106,18 +88,16 @@ export default function RegistrationForm() {
       return;
     }
 
+    if (previewOnly) {
+      setSubmitError("This is a preview: the form can't be submitted here.");
+      return;
+    }
+
     setSubmitError(null);
     setIsSubmitting(true);
 
     try {
-      const result = await submitExpressionOfInterest({
-        firstName: trimmedFirstName,
-        email: trimmedEmail,
-        country,
-        ageGroup,
-        preferredLanguage,
-        consent,
-      });
+      const result = await submitExpressionOfInterest(input);
 
       if (result.status === "validation_error") {
         setErrors(result.errors);
@@ -147,9 +127,7 @@ export default function RegistrationForm() {
 
   return (
     <div>
-      <h2 className="text-subheading font-semibold text-ink">
-        Expression of interest form
-      </h2>
+      <h2 className="text-subheading font-semibold text-ink">{heading}</h2>
 
       {submitError && (
         <p
@@ -211,26 +189,6 @@ export default function RegistrationForm() {
               </p>
             )}
           </div>
-        </div>
-
-        <div>
-          <label htmlFor="country" className={labelClasses}>
-            Country of residence {optionalTag}
-          </label>
-          <select
-            id="country"
-            name="country"
-            value={country}
-            onChange={(event) => setCountry(event.target.value)}
-            className={fieldClasses}
-          >
-            <option value="">Select a country</option>
-            {COUNTRIES.map((countryName) => (
-              <option key={countryName} value={countryName}>
-                {countryName}
-              </option>
-            ))}
-          </select>
         </div>
 
         <fieldset>

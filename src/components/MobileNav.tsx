@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import SurveyButton from "./SurveyButton";
+import type { EoiButtonLink } from "@/lib/eoi-button";
 import type { NavLink } from "@/lib/site-config";
 
-export default function MobileNav({ links }: { links: NavLink[] }) {
+export default function MobileNav({ links, eoiButton }: { links: NavLink[]; eoiButton: EoiButtonLink }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -44,7 +45,7 @@ export default function MobileNav({ links }: { links: NavLink[] }) {
           aria-label="Primary"
           className="absolute inset-x-0 top-full max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-border bg-paper px-4 py-4 shadow-sm sm:px-6"
         >
-          <SurveyButton className="mb-2 w-full" />
+          <SurveyButton button={eoiButton} className="mb-2 w-full" />
           <ul className="flex flex-col divide-y divide-border text-base">
             {links.map((link) => (
               <li key={link.href}>

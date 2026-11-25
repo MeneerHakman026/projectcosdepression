@@ -2,16 +2,34 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import CmsNotInstalled from "@/components/admin/cms/CmsNotInstalled";
+import EoiButtonEditor from "@/components/admin/cms/EoiButtonEditor";
 import HomeEditor from "@/components/admin/cms/HomeEditor";
+import RegistrationEditor from "@/components/admin/cms/RegistrationEditor";
+import type { EoiButtonContent } from "@/content/eoi-button/schema";
 import type { HomeContent } from "@/content/home/schema";
+import type { RegistrationContent } from "@/content/registration/schema";
 import { editorNameOf, requireAdminSession } from "@/lib/admin/session";
-import { getPageDefinition, HOME_PAGE } from "@/lib/cms/pages";
+import { EOI_BUTTON, getPageDefinition, HOME_PAGE, REGISTRATION_PAGE } from "@/lib/cms/pages";
 import { cms } from "@/lib/cms/server";
 import { CmsNotInstalledError, type PageState } from "@/lib/cms/service";
+import { resolveEoiButton, type EoiButtonLink } from "@/lib/eoi-button";
+
+const EDITABLE = new Set([HOME_PAGE.slug, REGISTRATION_PAGE.slug, EOI_BUTTON.slug]);
 
 export async function generateMetadata({ params }: PageProps<"/admin/content/pages/[slug]">): Promise<Metadata> {
   const { slug } = await params;
   return { title: `Edit ${getPageDefinition(slug)?.name ?? "page"}` };
+}
+
+/** What the live site shows right now, read directly (uncached) for the editor. */
+async function liveEoiButton(): Promise<EoiButtonLink> {
+  try {
+    return resolveEoiButton(await cms.getPublishedContent(EOI_BUTTON));
+  } catch {
+    // Unreadable stored content: the live site keeps serving its last
+    // cached version, which can't be determined here.
+    return resolveEoiButton(EOI_BUTTON.defaults);
+  }
 }
 
 export default async function EditPage({ params }: PageProps<"/admin/content/pages/[slug]">) {
@@ -20,7 +38,7 @@ export default async function EditPage({ params }: PageProps<"/admin/content/pag
   const page = getPageDefinition(slug);
   // Only pages with a dedicated editor are listed; /study and others get
   // one when their content model is defined.
-  if (!page || page.slug !== HOME_PAGE.slug) notFound();
+  if (!page || !EDITABLE.has(page.slug)) notFound();
 
   let state: PageState | null = null;
   try {
@@ -28,6 +46,18 @@ export default async function EditPage({ params }: PageProps<"/admin/content/pag
   } catch (error) {
     if (!(error instanceof CmsNotInstalledError)) throw error;
   }
+
+  const editorProps = state && {
+    slug: page.slug,
+    pageName: page.name,
+    pagePath: page.path,
+    initialVersion: state.version,
+    initialStatus: state.status,
+    draftSavedAt: state.draftSavedAt,
+    draftSavedBy: state.draftSavedBy,
+    contentError: state.contentError,
+    editorName: editorNameOf(session),
+  };
 
   return (
     <div>
@@ -37,21 +67,19 @@ export default async function EditPage({ params }: PageProps<"/admin/content/pag
         </Link>
       </p>
       <h1 className="mt-2 text-heading font-semibold text-ink">Edit {page.name.toLowerCase()}</h1>
+      {page.scope === "site" && <p className="mt-2 max-w-2xl text-body text-ink-muted">{page.description}</p>}
 
-      {state === null ? (
+      {state === null || editorProps === null ? (
         <CmsNotInstalled />
+      ) : page.slug === HOME_PAGE.slug ? (
+        <HomeEditor {...editorProps} initialContent={state.content as HomeContent} />
+      ) : page.slug === REGISTRATION_PAGE.slug ? (
+        <RegistrationEditor {...editorProps} initialContent={state.content as RegistrationContent} />
       ) : (
-        <HomeEditor
-          slug={page.slug}
-          pageName={page.name}
-          pagePath={page.path}
-          initialContent={state.content as HomeContent}
-          initialVersion={state.version}
-          initialStatus={state.status}
-          draftSavedAt={state.draftSavedAt}
-          draftSavedBy={state.draftSavedBy}
-          contentError={state.contentError}
-          editorName={editorNameOf(session)}
+        <EoiButtonEditor
+          {...editorProps}
+          initialContent={state.content as EoiButtonContent}
+          live={await liveEoiButton()}
         />
       )}
     </div>

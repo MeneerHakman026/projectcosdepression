@@ -124,13 +124,13 @@ describe("CMS service (against real Postgres SQL)", () => {
 
   it("validates content on the server and reports field errors", async () => {
     const result = await cms.saveDraft(page, {
-      content: edited((c) => (c.hero.primaryCta.href = "javascript:alert(1)")),
+      content: edited((c) => (c.hero.secondaryCta.href = "javascript:alert(1)")),
       expectedVersion: 0,
       author: "Chris",
     });
     expect(result).toMatchObject({ ok: false, reason: "invalid" });
     expect(result.ok === false && result.reason === "invalid" && result.fieldErrors).toHaveProperty([
-      "hero.primaryCta.href",
+      "hero.secondaryCta.href",
     ]);
     expect((await cms.getPageState(page)).status).toBe("default");
   });

@@ -2,7 +2,7 @@
 
 import { revalidatePath, updateTag } from "next/cache";
 import { editorNameOf, requireAdminSession } from "@/lib/admin/session";
-import { getPageDefinition, pageCacheTag } from "@/lib/cms/pages";
+import { getPageDefinition, pageCacheTag, revalidationTargets } from "@/lib/cms/pages";
 import { cms } from "@/lib/cms/server";
 import { CmsNotInstalledError, type PublishResult, type SaveResult } from "@/lib/cms/service";
 
@@ -64,9 +64,10 @@ export async function publishDraft(slug: string, expectedVersion: number): Promi
     const result = await cms.publish(page, { expectedVersion, author: editorNameOf(session) });
     if (result.ok) {
       // Expire the cached content immediately (not stale-while-revalidate),
-      // so the next visitor already sees what was just published.
+      // so the next visitor already sees what was just published. A
+      // site-wide setting (the EOI button) refreshes every page.
       updateTag(pageCacheTag(page.slug));
-      revalidatePath(page.path);
+      for (const target of revalidationTargets(page)) revalidatePath(target.path, target.type);
       revalidateAdmin(page.slug);
     }
     return result;

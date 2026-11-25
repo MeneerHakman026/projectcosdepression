@@ -64,24 +64,28 @@ export default async function AdminEoiPage({
           />
         </div>
 
-        <div>
-          <label htmlFor="country" className={labelClasses}>
-            Country
-          </label>
-          <select
-            id="country"
-            name="country"
-            defaultValue={filters.country ?? ""}
-            className={fieldClasses}
-          >
-            <option value="">All countries</option>
-            {facets.countries.map((country) => (
-              <option key={country} value={country}>
-                {country}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* The form no longer asks for a country; the filter stays available
+            only while earlier submissions with a country are still stored. */}
+        {(facets.countries.length > 0 || filters.country) && (
+          <div>
+            <label htmlFor="country" className={labelClasses}>
+              Country <span className="font-normal text-ink-muted">(earlier submissions)</span>
+            </label>
+            <select
+              id="country"
+              name="country"
+              defaultValue={filters.country ?? ""}
+              className={fieldClasses}
+            >
+              <option value="">All countries</option>
+              {facets.countries.map((country) => (
+                <option key={country} value={country}>
+                  {country}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div>
           <label htmlFor="ageGroup" className={labelClasses}>

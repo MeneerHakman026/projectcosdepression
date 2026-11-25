@@ -46,6 +46,18 @@ export function isSafeHref(href: string): boolean {
 }
 
 /**
+ * Stricter rule for links that send visitors to another organisation's
+ * website (e.g. the external study registration site): https only, a real
+ * host name, and no embedded credentials ("https://user:pass@host"), which
+ * are a common way of disguising where a link really goes.
+ */
+export function isSafeExternalUrl(href: string): boolean {
+  if (classifyHref(href) !== "external") return false;
+  const url = new URL(href);
+  return url.username === "" && url.password === "";
+}
+
+/**
  * Images are served from the site's own /public folder. Editors reference
  * them by path (e.g. "/front_photo.png"); remote URLs are not accepted, so
  * no third-party host is ever loaded on the public site.

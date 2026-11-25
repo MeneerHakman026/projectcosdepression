@@ -2,58 +2,42 @@
 
 import { redirect } from "next/navigation";
 import { sql } from "@/lib/db";
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { validateSubmission, type SubmissionErrors } from "@/lib/registration/submission";
 
 export type SubmitExpressionOfInterestInput = {
   firstName: string;
   email: string;
-  country: string;
   ageGroup: string;
   preferredLanguage: string;
   consent: boolean;
 };
 
-export type SubmitExpressionOfInterestErrors = {
-  firstName?: string;
-  email?: string;
-  consent?: string;
-};
+export type SubmitExpressionOfInterestErrors = SubmissionErrors;
 
 export type SubmitExpressionOfInterestResult =
   | { status: "validation_error"; errors: SubmitExpressionOfInterestErrors }
   | { status: "server_error"; message: string };
 
+/**
+ * Stores an Expression of Interest. The form no longer asks for a country:
+ * new rows leave the (nullable) `country` column empty, and existing rows
+ * keep whatever country they were submitted with.
+ */
 export async function submitExpressionOfInterest(
   input: SubmitExpressionOfInterestInput
 ): Promise<SubmitExpressionOfInterestResult> {
-  const firstName = input.firstName.trim();
-  const email = input.email.trim();
-
-  const errors: SubmitExpressionOfInterestErrors = {};
-  if (!firstName) {
-    errors.firstName = "Enter your first name.";
+  const result = validateSubmission(input);
+  if (!result.ok) {
+    return { status: "validation_error", errors: result.errors };
   }
-  if (!email) {
-    errors.email = "Enter your email address.";
-  } else if (!EMAIL_PATTERN.test(email)) {
-    errors.email = "Enter a valid email address.";
-  }
-  if (!input.consent) {
-    errors.consent =
-      "Please confirm that you have read and understood the Privacy Policy.";
-  }
-
-  if (Object.keys(errors).length > 0) {
-    return { status: "validation_error", errors };
-  }
+  const { firstName, email, ageGroup, preferredLanguage, consent } = result.values;
 
   try {
     await sql`
       INSERT INTO expressions_of_interest
-        (first_name, email, country, age_group, preferred_language, consent_given)
+        (first_name, email, age_group, preferred_language, consent_given)
       VALUES
-        (${firstName}, ${email}, ${input.country || null}, ${input.ageGroup || null}, ${input.preferredLanguage || null}, ${input.consent})
+        (${firstName}, ${email}, ${ageGroup}, ${preferredLanguage}, ${consent})
     `;
   } catch (error) {
     console.error("Failed to insert expression of interest:", error);

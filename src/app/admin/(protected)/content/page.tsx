@@ -3,7 +3,7 @@ import Link from "next/link";
 import CmsNotInstalled from "@/components/admin/cms/CmsNotInstalled";
 import PageStatusBadge from "@/components/admin/cms/PageStatusBadge";
 import { formatDateTime } from "@/lib/admin/format";
-import { CMS_PAGES } from "@/lib/cms/pages";
+import { CMS_PAGES, getPageDefinition } from "@/lib/cms/pages";
 import { cms } from "@/lib/cms/server";
 import { CmsNotInstalledError, type PageSummary } from "@/lib/cms/service";
 
@@ -56,14 +56,18 @@ export default async function AdminContentPage() {
                   <tr key={page.slug} className="border-b border-border bg-paper last:border-b-0">
                     <td className="px-4 py-3 font-medium text-ink">{page.name}</td>
                     <td className="px-4 py-3">
-                      <a
-                        href={page.path}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-mono text-ink-muted underline underline-offset-2 hover:text-ink"
-                      >
-                        {page.path}
-                      </a>
+                      {getPageDefinition(page.slug)?.scope === "site" ? (
+                        <span className="text-ink-muted">Every page</span>
+                      ) : (
+                        <a
+                          href={page.path}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-ink-muted underline underline-offset-2 hover:text-ink"
+                        >
+                          {page.path}
+                        </a>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <PageStatusBadge status={page.status} />
@@ -89,6 +93,7 @@ export default async function AdminContentPage() {
             </table>
           </div>
           <p className="mt-4 max-w-2xl text-sm text-ink-muted">
+            &ldquo;Expression of Interest button&rdquo; controls the button text and destination on every page.
             More pages, such as Study &amp; FAQs, will appear here as they become editable.
           </p>
         </>

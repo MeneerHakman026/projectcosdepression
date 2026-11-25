@@ -43,7 +43,6 @@ export const HOME_DEFAULTS: HomeContent = {
     heading: "Deciding together what matters in depression care",
     intro:
       "COS-D is working out which outcomes should always be measured in depression research — the things that matter most to people living with depression, their carers, and healthcare professionals — so that different studies can be fairly compared.",
-    primaryCta: { label: "Expression of interest", href: "/registration" },
     secondaryCta: { label: "Learn what this means", href: "#what-is-cos-d" },
     image: {
       src: "/front_photo.png",
@@ -209,7 +208,6 @@ export const HOME_DEFAULTS: HomeContent = {
     visible: true,
     heading: "Want to take part?",
     body: "The next stage of COS-D is open to people with depression, their carers, and healthcare professionals. Register your interest and we'll be in touch.",
-    primaryCta: { label: "Expression of interest", href: "/registration" },
     secondaryCta: { label: "Read more about the study", href: "/study" },
   },
   // Full references from docs/CONTENT_SOURCES.md ("Source papers").

@@ -16,11 +16,15 @@ import {
  * existing sections one to one (components/home/HomePage.tsx); the layout
  * and styling of each section stay in code.
  *
- * Bump HOME_SCHEMA_VERSION and add a step to migrateHomeContent (see
- * lib/cms/pages.ts) whenever a change here would make previously saved
- * content invalid.
+ * Bump HOME_SCHEMA_VERSION and add a step to migrateHomeContent whenever a
+ * change here would make previously saved content invalid.
+ *
+ * The Expression of Interest buttons in the introduction and the closing
+ * section aren't part of this content: their text and destination come from
+ * the site-wide "Expression of Interest button" setting (content/eoi-button),
+ * so every EOI button on the site always matches.
  */
-export const HOME_SCHEMA_VERSION = 1;
+export const HOME_SCHEMA_VERSION = 2;
 
 /** Anchor the hero's "Learn what this means" button points to. */
 export const ABOUT_SECTION_ID = "what-is-cos-d";
@@ -52,7 +56,6 @@ export const homeContentSchema = z
       eyebrow: plainText(40),
       heading: plainText(140),
       intro: richText(600),
-      primaryCta: cta,
       secondaryCta: cta,
       image: z.object({
         src: imagePath,
@@ -121,7 +124,6 @@ export const homeContentSchema = z
       visible,
       heading: plainText(100),
       body: richText(600),
-      primaryCta: cta,
       secondaryCta: cta,
     }),
     references: z.array(reference).max(50, "Use at most 50 sources."),
@@ -160,22 +162,39 @@ export const homeContentSchema = z
     // A button pointing at a hidden section would scroll to nothing.
     if (!content.about.visible) {
       const anchor = `#${ABOUT_SECTION_ID}`;
-      const buttons = [
-        { path: ["hero", "secondaryCta", "href"], value: content.hero.secondaryCta.href },
-        { path: ["hero", "primaryCta", "href"], value: content.hero.primaryCta.href },
-      ];
-      for (const button of buttons) {
-        if (button.value === anchor) {
-          ctx.addIssue({
-            code: "custom",
-            path: button.path,
-            message: `This button links to the "${content.about.heading}" section, which is hidden.`,
-          });
-        }
+      if (content.hero.secondaryCta.href === anchor) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["hero", "secondaryCta", "href"],
+          message: `This button links to the "${content.about.heading}" section, which is hidden.`,
+        });
       }
     }
   });
 
 export type HomeContent = z.infer<typeof homeContentSchema>;
+
+/**
+ * Upgrades saved homepage content to the current schema.
+ *
+ * v1 → v2: the introduction's and closing section's main buttons
+ * (`primaryCta`) moved to the site-wide Expression of Interest button
+ * setting. Their stored label and link are dropped. Before this change both
+ * still held the built-in "Expression of interest" → /registration, which is
+ * exactly what the new setting defaults to, so nothing visible changes.
+ */
+export function migrateHomeContent(content: unknown, fromVersion: number): unknown {
+  if (fromVersion < 2 && content && typeof content === "object") {
+    const { hero, finalCta, ...rest } = content as Record<string, unknown>;
+    const withoutPrimary = (section: unknown) => {
+      if (!section || typeof section !== "object") return section;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { primaryCta, ...others } = section as Record<string, unknown>;
+      return others;
+    };
+    return { ...rest, hero: withoutPrimary(hero), finalCta: withoutPrimary(finalCta) };
+  }
+  return content;
+}
 export type ResearchMetricContent = HomeContent["evidence"]["metrics"][number];
 export type DevelopmentStepContent = HomeContent["development"]["steps"][number];

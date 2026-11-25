@@ -8,6 +8,7 @@ import SurveyButton from "@/components/SurveyButton";
 import TriMark from "@/components/TriMark";
 import { ABOUT_SECTION_ID, type HomeContent } from "@/content/home/schema";
 import type { Accent } from "@/lib/cms/validation";
+import type { EoiButtonLink } from "@/lib/eoi-button";
 
 const ACCENT_BORDER_CLASSES: Record<Accent, string> = {
   teal: "border-teal",
@@ -19,7 +20,8 @@ const ACCENT_BORDER_CLASSES: Record<Accent, string> = {
  * Homepage layout. All wording comes from `content` (edited in the admin,
  * defaults in content/home/defaults.ts); structure and styling stay here.
  * Rendered by both the public homepage and the admin draft preview, so a
- * preview is always the real page.
+ * preview is always the real page. The Expression of Interest buttons come
+ * from the site-wide button setting (`eoiButton`), not from this content.
  *
  * Two kinds of number appear on this page and must stay visually and
  * verbally distinct:
@@ -29,7 +31,7 @@ const ACCENT_BORDER_CLASSES: Record<Accent, string> = {
  *    until Chris confirms the Step 2 survey is open and supplies a real
  *    figure. Never backfilled with PROCEED or recruitment-target numbers.
  */
-export default function HomePage({ content }: { content: HomeContent }) {
+export default function HomePage({ content, eoiButton }: { content: HomeContent; eoiButton: EoiButtonLink }) {
   const { hero, about, evidence, development, involved, explore, finalCta } = content;
 
   return (
@@ -49,7 +51,7 @@ export default function HomePage({ content }: { content: HomeContent }) {
               <RichText text={hero.intro} />
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-3 sm:mt-8">
-              <SurveyButton href={hero.primaryCta.href}>{hero.primaryCta.label}</SurveyButton>
+              <SurveyButton button={eoiButton} />
               <a
                 href={hero.secondaryCta.href}
                 className="btn border-transparent bg-transparent px-0 py-2 text-ink-muted underline underline-offset-4 hover:bg-transparent hover:text-ink sm:border-ink sm:bg-transparent sm:px-6 sm:py-2.5 sm:text-ink sm:no-underline sm:hover:bg-ink sm:hover:text-paper"
@@ -198,7 +200,7 @@ export default function HomePage({ content }: { content: HomeContent }) {
         </Section>
       )}
 
-      {/* Final CTA — links through to the expression-of-interest form. */}
+      {/* Final CTA — the site-wide Expression of Interest button. */}
       {finalCta.visible && (
         <section className="bg-navy">
           <div className="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6 sm:py-20">
@@ -212,7 +214,7 @@ export default function HomePage({ content }: { content: HomeContent }) {
               />
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <SurveyButton href={finalCta.primaryCta.href}>{finalCta.primaryCta.label}</SurveyButton>
+              <SurveyButton button={eoiButton} />
               <a
                 href={finalCta.secondaryCta.href}
                 className="btn border-paper/40 bg-transparent text-paper hover:bg-paper hover:text-navy"

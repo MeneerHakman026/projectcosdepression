@@ -2,9 +2,12 @@ import Image from "next/image";
 import Link from "next/link";
 import MobileNav from "./MobileNav";
 import SurveyButton from "./SurveyButton";
+import { getEoiButton } from "@/lib/eoi-button.server";
 import { PRIMARY_NAV, SITE_NAME } from "@/lib/site-config";
 
-export default function Header() {
+export default async function Header() {
+  const eoiButton = await getEoiButton();
+
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-paper">
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-header-y sm:px-gutter-header">
@@ -35,9 +38,9 @@ export default function Header() {
         </nav>
 
         <div className="col-start-3 ml-auto flex items-center justify-self-end gap-2">
-          <SurveyButton compact className="sm:hidden" />
-          <SurveyButton className="hidden sm:inline-flex" />
-          <MobileNav links={PRIMARY_NAV} />
+          <SurveyButton button={eoiButton} compact className="sm:hidden" />
+          <SurveyButton button={eoiButton} className="hidden sm:inline-flex" />
+          <MobileNav links={PRIMARY_NAV} eoiButton={eoiButton} />
         </div>
       </div>
     </header>

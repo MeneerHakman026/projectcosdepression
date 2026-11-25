@@ -1,23 +1,19 @@
-import { type ReactNode } from "react";
 import Link from "next/link";
-import { SURVEY_URL } from "@/lib/site-config";
+import type { EoiButtonLink } from "@/lib/eoi-button";
 
 type SurveyButtonProps = {
-  /** Defaults to the site-wide Expression of Interest destination. */
-  href?: string;
+  /**
+   * The resolved site-wide Expression of Interest button (label and
+   * destination), from getEoiButton() in lib/eoi-button.server.ts. Every
+   * EOI button takes it from there, so they always agree.
+   */
+  button: EoiButtonLink;
   variant?: "primary" | "secondary";
   compact?: boolean;
   className?: string;
-  children?: ReactNode;
 };
 
-export default function SurveyButton({
-  href = SURVEY_URL,
-  variant = "primary",
-  compact = false,
-  className = "",
-  children,
-}: SurveyButtonProps) {
+export default function SurveyButton({ button, variant = "primary", compact = false, className = "" }: SurveyButtonProps) {
   const classes = [
     "btn",
     variant === "primary" && "btn-primary",
@@ -27,25 +23,21 @@ export default function SurveyButton({
     .filter(Boolean)
     .join(" ");
 
-  const label = children ?? "Expression of interest";
-
-  // Kept so a placeholder URL ("#") still degrades to the inert "not yet
-  // open" state instead of rendering a dead link.
-  if (href === "#") {
+  if (button.external) {
+    // An ordinary link in the same tab: the visitor is moving on to the
+    // study's own registration site. No redirect through this site, and no
+    // window.opener access (that only applies to target="_blank" links,
+    // which this deliberately isn't).
     return (
-      <span aria-disabled="true" className={`${classes} cursor-not-allowed opacity-60`}>
-        <span aria-hidden="true">{label}</span>
-        <span aria-hidden="true" className="text-[0.625rem] font-semibold normal-case tracking-normal">
-          (soon)
-        </span>
-        <span className="sr-only">The survey is not open yet.</span>
-      </span>
+      <a href={button.href} className={classes}>
+        {button.label}
+      </a>
     );
   }
 
   return (
-    <Link href={href} className={classes}>
-      {label}
+    <Link href={button.href} className={classes}>
+      {button.label}
     </Link>
   );
 }

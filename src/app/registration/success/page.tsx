@@ -1,29 +1,14 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import Hero from "@/components/Hero";
-import Section from "@/components/Section";
+import RegistrationSuccess from "@/components/registration/RegistrationSuccess";
+import { REGISTRATION_PAGE } from "@/lib/cms/pages";
+import { getPublishedContent } from "@/lib/cms/server";
 
-export const metadata: Metadata = {
-  title: "Expression of interest received",
-  description: "Thank you for your interest in COS-D.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { success } = await getPublishedContent(REGISTRATION_PAGE);
+  return { title: "Expression of interest received", description: success.heading };
+}
 
-export default function RegistrationSuccessPage() {
-  return (
-    <>
-      <Hero
-        eyebrow="Expression of Interest"
-        title="Thank you for your interest in COS-D."
-        description="We'll contact you when the COS-D survey opens."
-      />
-      <Section width="narrow" divider>
-        <Link
-          href="/"
-          className="text-ink underline underline-offset-2 hover:text-accent"
-        >
-          Return to the homepage
-        </Link>
-      </Section>
-    </>
-  );
+export default async function RegistrationSuccessPage() {
+  const content = await getPublishedContent(REGISTRATION_PAGE);
+  return <RegistrationSuccess content={content} />;
 }

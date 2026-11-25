@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { toFieldErrors } from "@/lib/cms/validation";
 import { HOME_DEFAULTS } from "./defaults";
-import { homeContentSchema, type HomeContent } from "./schema";
+import { homeContentSchema, migrateHomeContent, type HomeContent } from "./schema";
 
 function withChanges(change: (draft: HomeContent) => void): HomeContent {
   const draft = structuredClone(HOME_DEFAULTS);
@@ -37,8 +37,22 @@ describe("homeContentSchema", () => {
   });
 
   it("rejects unsafe button links", () => {
-    const errors = errorsFor(withChanges((c) => (c.hero.primaryCta.href = "javascript:alert(1)")));
-    expect(errors).toHaveProperty(["hero.primaryCta.href"]);
+    const errors = errorsFor(withChanges((c) => (c.hero.secondaryCta.href = "javascript:alert(1)")));
+    expect(errors).toHaveProperty(["hero.secondaryCta.href"]);
+  });
+
+  it("upgrades v1 content by dropping the per-page Expression of Interest buttons", () => {
+    const v1 = {
+      ...structuredClone(HOME_DEFAULTS),
+      hero: { ...HOME_DEFAULTS.hero, primaryCta: { label: "Expression of interest", href: "/registration" } },
+      finalCta: { ...HOME_DEFAULTS.finalCta, primaryCta: { label: "Expression of interest", href: "/registration" } },
+    };
+    const upgraded = migrateHomeContent(v1, 1);
+    expect(upgraded).not.toHaveProperty(["hero", "primaryCta"]);
+    expect(upgraded).not.toHaveProperty(["finalCta", "primaryCta"]);
+    // Everything else is carried over untouched.
+    expect(homeContentSchema.parse(upgraded)).toEqual(HOME_DEFAULTS);
+    expect(migrateHomeContent(HOME_DEFAULTS, 2)).toBe(HOME_DEFAULTS);
   });
 
   it("rejects unsafe links inside formatted text", () => {

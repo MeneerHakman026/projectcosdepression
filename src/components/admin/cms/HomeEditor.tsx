@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { DevelopmentStepContent, HomeContent, ResearchMetricContent } from "@/content/home/schema";
 import { joinPath, type ContentPath } from "@/lib/cms/paths";
 import type { Citation, Reference } from "@/lib/cms/validation";
@@ -23,6 +24,19 @@ const ACCENT_OPTIONS = [
 ];
 
 const FORMATTING_HINT = "You can use italic, bold and links.";
+
+function EoiButtonNote() {
+  return (
+    <p className="text-sm text-ink-muted">
+      <span className="font-medium text-ink">Main button:</span> the site-wide Expression of Interest button. Its
+      text and destination are set in{" "}
+      <Link href="/admin/content/pages/eoi-button" className="text-ink underline underline-offset-2">
+        Expression of Interest button
+      </Link>
+      .
+    </p>
+  );
+}
 
 function CitationsField({ path, label, hint }: { path: ContentPath; label: string; hint?: string }) {
   const editor = useEditor();
@@ -55,7 +69,7 @@ export default function HomeEditor(props: Omit<ContentEditorProps, "children"> &
         <TextField path="hero.eyebrow" label="Small label above the heading" maxLength={40} />
         <TextField path="hero.heading" label="Main heading" />
         <RichTextField path="hero.intro" label="Introduction" hint={FORMATTING_HINT} />
-        <CtaFields path="hero.primaryCta" label="Main button" />
+        <EoiButtonNote />
         <CtaFields path="hero.secondaryCta" label="Second button" />
         <ImageField path="hero.image" label="Photo" />
       </SectionPanel>
@@ -201,7 +215,7 @@ export default function HomeEditor(props: Omit<ContentEditorProps, "children"> &
       <SectionPanel path="finalCta" title="Closing call to action" description="Dark band at the bottom of the page" hasVisibility>
         <TextField path="finalCta.heading" label="Heading" />
         <RichTextField path="finalCta.body" label="Text" hint={FORMATTING_HINT} />
-        <CtaFields path="finalCta.primaryCta" label="Main button" />
+        <EoiButtonNote />
         <CtaFields path="finalCta.secondaryCta" label="Second button" />
       </SectionPanel>
 

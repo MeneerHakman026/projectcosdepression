@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import HomePage from "@/components/home/HomePage";
 import { HOME_PAGE } from "@/lib/cms/pages";
 import { getPublishedContent } from "@/lib/cms/server";
+import { getEoiButton } from "@/lib/eoi-button.server";
 
 /**
  * Homepage. Content is managed in the admin (Admin → Content → Homepage)
@@ -21,6 +22,6 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Home() {
-  const content = await getPublishedContent(HOME_PAGE);
-  return <HomePage content={content} />;
+  const [content, eoiButton] = await Promise.all([getPublishedContent(HOME_PAGE), getEoiButton()]);
+  return <HomePage content={content} eoiButton={eoiButton} />;
 }

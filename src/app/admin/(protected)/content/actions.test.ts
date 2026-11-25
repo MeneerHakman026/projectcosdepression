@@ -82,7 +82,7 @@ describe("content server actions", () => {
       author: "Chris",
     });
     expect(cache.updateTag).not.toHaveBeenCalled();
-    expect(cache.revalidatePath).not.toHaveBeenCalledWith("/");
+    expect(cache.revalidatePath).not.toHaveBeenCalledWith("/", undefined);
   });
 
   it("invalidates the public page only after a successful publish", async () => {
@@ -96,7 +96,7 @@ describe("content server actions", () => {
       author: "Chris",
     });
     expect(cache.updateTag).toHaveBeenCalledWith("cms:page:home");
-    expect(cache.revalidatePath).toHaveBeenCalledWith("/");
+    expect(cache.revalidatePath).toHaveBeenCalledWith("/", undefined);
   });
 
   it("leaves the public cache alone when publishing fails", async () => {
@@ -105,7 +105,60 @@ describe("content server actions", () => {
 
     expect(await publishDraft("home", 1)).toMatchObject({ ok: false, reason: "conflict" });
     expect(cache.updateTag).not.toHaveBeenCalled();
-    expect(cache.revalidatePath).not.toHaveBeenCalledWith("/");
+    expect(cache.revalidatePath).not.toHaveBeenCalledWith("/", undefined);
+  });
+
+  describe("Registration page and Expression of Interest button", () => {
+    it.each(["registration", "eoi-button"])("requires a session to change %s", async (slug) => {
+      await expect(saveDraft(slug, 0, {})).rejects.toMatchObject({ url: "/admin/login" });
+      await expect(publishDraft(slug, 1)).rejects.toMatchObject({ url: "/admin/login" });
+      await expect(restoreRevision(slug, 1, 1)).rejects.toMatchObject({ url: "/admin/login" });
+      expect(cms.saveDraft).not.toHaveBeenCalled();
+      expect(cms.publish).not.toHaveBeenCalled();
+      expect(cms.restoreRevision).not.toHaveBeenCalled();
+    });
+
+    it.each(["registration", "eoi-button"])("saving a %s draft leaves every public page cached", async (slug) => {
+      signIn("Chris");
+      cms.saveDraft.mockResolvedValue({ ok: true, version: 1, savedAt: "2026-01-01T00:00:00.000Z", revisionNumber: 1 });
+
+      expect(await saveDraft(slug, 0, {})).toMatchObject({ ok: true });
+      expect(cms.saveDraft).toHaveBeenCalledWith(expect.objectContaining({ slug }), expect.anything());
+      expect(cache.updateTag).not.toHaveBeenCalled();
+      const publicPaths = cache.revalidatePath.mock.calls.filter(([path]) => !String(path).startsWith("/admin"));
+      expect(publicPaths).toEqual([]);
+    });
+
+    it("publishing the Registration page refreshes the registration and thank-you pages", async () => {
+      signIn("Chris");
+      cms.publish.mockResolvedValue({ ok: true, revisionNumber: 2, publishedAt: "2026-01-01T00:00:00.000Z" });
+
+      await publishDraft("registration", 1);
+
+      expect(cache.updateTag).toHaveBeenCalledWith("cms:page:registration");
+      expect(cache.revalidatePath).toHaveBeenCalledWith("/registration", undefined);
+      expect(cache.revalidatePath).toHaveBeenCalledWith("/registration/success", undefined);
+    });
+
+    it("publishing the button refreshes every page, since the header shows it everywhere", async () => {
+      signIn("Chris");
+      cms.publish.mockResolvedValue({ ok: true, revisionNumber: 2, publishedAt: "2026-01-01T00:00:00.000Z" });
+
+      await publishDraft("eoi-button", 1);
+
+      expect(cache.updateTag).toHaveBeenCalledWith("cms:page:eoi-button");
+      expect(cache.revalidatePath).toHaveBeenCalledWith("/", "layout");
+    });
+
+    it("a failed button publish leaves the live site alone", async () => {
+      signIn("Chris");
+      cms.publish.mockResolvedValue({ ok: false, reason: "invalid", message: "x", fieldErrors: {} });
+
+      await publishDraft("eoi-button", 1);
+
+      expect(cache.updateTag).not.toHaveBeenCalled();
+      expect(cache.revalidatePath).not.toHaveBeenCalledWith("/", "layout");
+    });
   });
 
   it("rejects unknown pages and malformed arguments", async () => {

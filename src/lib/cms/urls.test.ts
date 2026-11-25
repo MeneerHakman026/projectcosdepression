@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyHref, isSafeHref, isSafeImagePath } from "./urls";
+import { classifyHref, isSafeExternalUrl, isSafeHref, isSafeImagePath } from "./urls";
 
 describe("classifyHref", () => {
   it.each([
@@ -46,4 +46,30 @@ describe("isSafeImagePath", () => {
       expect(isSafeImagePath(src)).toBe(false);
     }
   );
+});
+
+describe("isSafeExternalUrl", () => {
+  it.each(["https://example.org/study", "https://study.example.org/register?lang=fr#start"])("accepts %s", (url) => {
+    expect(isSafeExternalUrl(url)).toBe(true);
+  });
+
+  it.each([
+    "",
+    "javascript:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "file:///etc/passwd",
+    "ftp://example.org/study",
+    "http://example.org/study",
+    "mailto:someone@example.org",
+    "/registration",
+    "#form",
+    "//example.org/study",
+    "https://localhost/study",
+    "https://user:password@example.org/study",
+    "https://example.org/study with spaces",
+    "example.org/study",
+    `https://example.org/${"a".repeat(2000)}`,
+  ])("rejects %j", (url) => {
+    expect(isSafeExternalUrl(url)).toBe(false);
+  });
 });

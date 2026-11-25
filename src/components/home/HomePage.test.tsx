@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { HOME_DEFAULTS } from "@/content/home/defaults";
 import type { HomeContent } from "@/content/home/schema";
 import { toPlainText, parseInline } from "@/lib/cms/rich-text";
+import type { EoiButtonLink } from "@/lib/eoi-button";
 import HomePage from "./HomePage";
 
 // next/image and next/link need the Next.js runtime; plain elements are
@@ -19,8 +20,10 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-function render(content: HomeContent) {
-  return renderToStaticMarkup(<HomePage content={content} />);
+const INTERNAL_BUTTON: EoiButtonLink = { label: "Expression of interest", href: "/registration", external: false };
+
+function render(content: HomeContent, eoiButton: EoiButtonLink = INTERNAL_BUTTON) {
+  return renderToStaticMarkup(<HomePage content={content} eoiButton={eoiButton} />);
 }
 
 function edited(change: (draft: HomeContent) => void): HomeContent {
@@ -40,7 +43,6 @@ describe("HomePage", () => {
       hero.eyebrow,
       hero.heading,
       hero.intro,
-      hero.primaryCta.label,
       hero.secondaryCta.label,
       about.heading,
       toPlainText(parseInline(about.body)),
@@ -72,6 +74,20 @@ describe("HomePage", () => {
     );
     expect(html).toContain("A different heading");
     expect(html).toContain(">81<");
+  });
+
+  it("uses the site-wide Expression of Interest button for both main buttons", () => {
+    const internal = render(HOME_DEFAULTS);
+    expect(internal.match(/<a href="\/registration" class="btn btn-primary">Expression of interest<\/a>/g)).toHaveLength(2);
+
+    const external = render(HOME_DEFAULTS, {
+      label: "Take part in the study",
+      href: "https://example.org/study",
+      external: true,
+    });
+    expect(external.match(/href="https:\/\/example\.org\/study"/g)).toHaveLength(2);
+    expect(external.match(/>Take part in the study</g)).toHaveLength(2);
+    expect(external).not.toContain('href="/registration"');
   });
 
   it("omits hidden sections entirely", () => {

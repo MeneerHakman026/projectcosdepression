@@ -157,6 +157,9 @@ function escapeCsvField(value: string): string {
   return value;
 }
 
+// "Country" stays in the export so files keep the same columns as before.
+// The form no longer asks for it: new submissions leave it empty, earlier
+// ones keep the country they were submitted with.
 const CSV_HEADER = [
   "First name",
   "Email",
