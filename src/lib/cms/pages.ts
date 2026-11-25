@@ -1,4 +1,6 @@
 import type { z } from "zod";
+import { DICTIONARY_PAGE_DEFAULTS } from "@/content/dictionary/defaults";
+import { DICTIONARY_PAGE_SCHEMA_VERSION, dictionaryPageSchema } from "@/content/dictionary/schema";
 import { EOI_BUTTON_DEFAULTS } from "@/content/eoi-button/defaults";
 import { EOI_BUTTON_SCHEMA_VERSION, eoiButtonSchema } from "@/content/eoi-button/schema";
 import { HOME_DEFAULTS } from "@/content/home/defaults";
@@ -27,6 +29,8 @@ export type PageDefinition<TContent = unknown> = {
   scope?: "page" | "site";
   /** Other URLs whose wording comes from this content (refreshed on publish). */
   alsoRevalidate?: string[];
+  /** Also refresh every URL below `path` (e.g. /dictionary/V_01) on publish. */
+  revalidateSubpaths?: boolean;
   schema: z.ZodType<TContent>;
   schemaVersion: number;
   defaults: TContent;
@@ -74,9 +78,22 @@ export const EOI_BUTTON = definePage({
   defaults: EOI_BUTTON_DEFAULTS,
 });
 
+export const DICTIONARY_PAGE = definePage({
+  slug: "dictionary",
+  path: "/dictionary",
+  name: "Outcome Dictionary page",
+  description:
+    "Wording around the Outcome Dictionary: introduction, source, and the participant-group legend. The dictionary entries themselves are managed by Excel import.",
+  revalidateSubpaths: true,
+  schema: dictionaryPageSchema,
+  schemaVersion: DICTIONARY_PAGE_SCHEMA_VERSION,
+  defaults: DICTIONARY_PAGE_DEFAULTS,
+});
+
 export const CMS_PAGES: PageDefinition[] = [
   HOME_PAGE as PageDefinition,
   REGISTRATION_PAGE as PageDefinition,
+  DICTIONARY_PAGE as PageDefinition,
   EOI_BUTTON as PageDefinition,
 ];
 
@@ -97,5 +114,8 @@ export type RevalidationTarget = { path: string; type?: "layout" };
  */
 export function revalidationTargets(page: PageDefinition): RevalidationTarget[] {
   if (page.scope === "site") return [{ path: "/", type: "layout" }];
+  if (page.revalidateSubpaths) {
+    return [{ path: page.path, type: "layout" }, ...(page.alsoRevalidate ?? []).map((path) => ({ path }))];
+  }
   return [page.path, ...(page.alsoRevalidate ?? [])].map((path) => ({ path }));
 }

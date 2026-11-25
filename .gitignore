@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Outcome Dictionary source workbooks: research content whose publication
+# rights are pending project-owner approval. Kept locally for authorized
+# validation only — never committed. Automated tests use a synthetic
+# workbook (test/dictionary-fixtures.ts).
+docs/dictionary/*.xlsx
+# Excel/Office lock files
+~$*
