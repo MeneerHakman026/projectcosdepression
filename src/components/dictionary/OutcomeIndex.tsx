@@ -2,11 +2,12 @@
 
 import type { MouseEvent, ReactNode } from "react";
 import { toneVars, type CategoryTone } from "@/lib/dictionary/category-colors";
-import { FIELD_LABELS, type TextField } from "@/lib/dictionary/model";
+import type { TextField } from "@/lib/dictionary/model";
 import { highlightRanges, snippet, type SearchResult } from "@/lib/dictionary/search";
 import type { ViewCategory, ViewGroup, ViewOutcome } from "@/lib/dictionary/view";
 import { EnMark } from "./CategoryNav";
 import Highlighted from "./Highlighted";
+import { useUiText, type UiText } from "./ui-text";
 
 const RESULT_FIELDS: TextField[] = ["definition", "experience", "verbatims"];
 
@@ -35,10 +36,11 @@ type OutcomeIndexProps = {
 };
 
 function Count({ n, className = "" }: { n: number; className?: string }) {
+  const t = useUiText();
   return (
     <span className={`tabular-nums font-normal text-ink-muted ${className}`}>
       {n}
-      <span className="sr-only"> {n === 1 ? "outcome" : "outcomes"}</span>
+      <span className="sr-only">{t.countSuffix(n, false)}</span>
     </span>
   );
 }
@@ -82,6 +84,7 @@ export default function OutcomeIndex({
   onFocusGroup,
   onToggleGroup,
 }: OutcomeIndexProps) {
+  const t = useUiText();
   const highlight = search?.highlight ?? null;
 
   function excerptOf(outcome: ViewOutcome): ReactNode {
@@ -93,7 +96,7 @@ export default function OutcomeIndex({
     if (!excerpt) return null;
     return (
       <span className="mt-0.5 block text-[0.8125rem] font-normal leading-snug text-ink-muted">
-        <span className="mr-1 text-[0.625rem] font-semibold uppercase tracking-[0.12em]">{FIELD_LABELS[field]}</span>
+        <span className="mr-1 text-[0.625rem] font-semibold uppercase tracking-[0.12em]">{t.fieldLabels[field as keyof UiText["fieldLabels"]]}</span>
         {excerpt.leading && "…"}
         <Highlighted text={excerpt.text} ranges={excerpt.ranges} />
         {excerpt.trailing && "…"}
@@ -112,7 +115,7 @@ export default function OutcomeIndex({
           href={hrefFor(outcome.id)}
           onClick={(event) => onSelect(event, outcome.id)}
           aria-current={selected ? "true" : undefined}
-          className={`block min-h-11 rounded px-3 py-2.5 text-[0.9375rem] leading-[1.45] transition-colors duration-150 sm:min-h-[1.875rem] sm:py-1 lg:min-h-8 lg:py-[0.3125rem] lg:text-sm ${
+          className={`block min-h-11 rounded px-3 py-2.5 text-[0.9375rem] leading-[1.45] transition-colors duration-150 sm:min-h-[1.875rem] sm:py-1 lg:min-h-8 lg:py-[0.3125rem] lg:text-[length:var(--dict-nav)] ${
             selected ? "bg-[var(--cat-soft)] font-semibold text-ink" : "text-dict-ink-soft hover:bg-dict-hover hover:text-ink"
           }`}
         >
@@ -142,7 +145,7 @@ export default function OutcomeIndex({
           itemColumns(layout.outcomes.length) ? "" : "sm:max-w-[23.5rem] lg:max-w-none"
         }`}
       >
-        <ol aria-label="Outcomes, best match first" className={`gap-x-4 ${itemColumns(layout.outcomes.length)}`}>
+        <ol aria-label={t.rankedListLabel} className={`gap-x-4 ${itemColumns(layout.outcomes.length)}`}>
           {layout.outcomes.map((outcome) => item(outcome, true))}
         </ol>
       </div>
@@ -161,7 +164,7 @@ export default function OutcomeIndex({
           <section key={category.key} aria-labelledby={headingId} style={toneVars(tones.get(category.key))} className="mt-[1.125rem] sm:mt-5 lg:mt-4">
             <div className="mb-2.5 flex items-center gap-2.5 sm:mb-3 lg:mb-2">
               <span aria-hidden="true" className="h-[1.125rem] w-1 shrink-0 rounded-sm bg-[var(--cat-line)]" />
-              <h2 id={headingId} lang={category.label.fallback ? "en" : undefined} className="text-lg font-bold tracking-[-0.01em] text-ink sm:text-xl lg:text-base">
+              <h2 id={headingId} lang={category.label.fallback ? "en" : undefined} className="text-lg font-bold tracking-[-0.01em] text-ink sm:text-xl lg:text-[length:var(--dict-nav-heading)]">
                 {category.label.text}
                 {category.label.fallback && <EnMark languageName={languageName} />}
               </h2>
@@ -196,7 +199,7 @@ export default function OutcomeIndex({
                       >
                         {name}
                         <Count n={outcomes.length} className="text-[0.8125rem]" />
-                        <span className="sr-only">{focused ? ", shown on its own. Show all groups" : ". Show only this group"}</span>
+                        <span className="sr-only">{focused ? t.shownOnItsOwn : t.showOnlyGroup}</span>
                         <span aria-hidden="true" className="w-3.5 text-center text-lg font-normal text-[var(--cat-text)]">
                           {focused ? "×" : "›"}
                         </span>
@@ -207,7 +210,7 @@ export default function OutcomeIndex({
                         aria-expanded={expanded}
                         aria-controls={listId}
                         onClick={() => onToggleGroup(group.key)}
-                        className={`${GROUP_BUTTON} flex min-h-[3.125rem] text-[0.9375rem] sm:max-lg:hidden lg:min-h-10 lg:text-sm`}
+                        className={`${GROUP_BUTTON} flex min-h-[3.125rem] text-[0.9375rem] sm:max-lg:hidden lg:min-h-10 lg:text-[length:var(--dict-nav)]`}
                       >
                         {name}
                         <Count n={outcomes.length} className="text-[0.8125rem]" />
