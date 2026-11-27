@@ -1,18 +1,10 @@
-import { Newsreader } from "next/font/google";
 import { Suspense } from "react";
 import RichText from "@/components/RichText";
-import TriMark from "@/components/TriMark";
 import type { DictionaryPageContent } from "@/content/dictionary/schema";
 import type { DictionaryView } from "@/lib/dictionary/view";
-import DictionaryExplorer, { type ExplorerFilters } from "./DictionaryExplorer";
-
-/** Participants' own words get a quiet serif voice, distinct from the scientific text. */
-const quoteFace = Newsreader({
-  subsets: ["latin", "latin-ext"],
-  style: ["normal", "italic"],
-  variable: "--font-quote",
-  display: "swap",
-});
+import DictionaryExplorer, { type ExplorerFilters, type SortChoice } from "./DictionaryExplorer";
+import DictionaryHeader from "./DictionaryHeader";
+import { DICTIONARY_CONTAINER } from "./layout";
 
 type DictionaryPageProps = {
   content: DictionaryPageContent;
@@ -25,21 +17,49 @@ type DictionaryPageProps = {
 
 const dateFormatter = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
+function plural(n: number, singular: string, pluralForm = `${singular}s`) {
+  return `${n} ${n === 1 ? singular : pluralForm}`;
+}
+
 /**
  * The Outcome Dictionary page. Wording comes from the CMS page
  * (`content`); every category, group, outcome and count comes from the
  * published dataset (`view`). Rendered by the public route and by the admin
  * preview, so a preview is always the real page.
  *
- * There is deliberately no hero: visitors arrive to look something up, so
- * the page opens on the title, search and the dictionary itself. The CMS
- * introduction is kept, as context, in the "About" section after it.
+ * The page opens on a compact title, the search and the dictionary itself;
+ * the CMS introduction, sources and version are in the "About this
+ * dictionary" disclosure beside the title.
  */
 export default function DictionaryPage({ content, view, basePath, urlMode, preserve, filters }: DictionaryPageProps) {
   const { intro } = content;
 
+  const about = (
+    <>
+      <p>
+        <RichText text={intro.description} />
+      </p>
+      <p>
+        <RichText text={content.source.body} />
+      </p>
+      {view && (
+        <p className="pt-1 text-[0.8125rem] leading-normal">
+          {plural(view.totals.outcomes, "outcome domain")} · {plural(view.totals.categories, "category", "categories")} ·{" "}
+          {plural(view.totals.groups, "group domain")}
+          {view.release && (
+            <>
+              <br />
+              Dictionary version {view.release.number}
+              {view.release.publishedAt && <> · published {dateFormatter.format(new Date(view.release.publishedAt))}</>}
+            </>
+          )}
+        </p>
+      )}
+    </>
+  );
+
   return (
-    <div className={quoteFace.variable}>
+    <div className="dictionary-canvas bg-dict-canvas">
       {view ? (
         // useSearchParams in the explorer needs a Suspense boundary.
         <Suspense>
@@ -47,10 +67,12 @@ export default function DictionaryPage({ content, view, basePath, urlMode, prese
             view={view}
             texts={{
               heading: intro.heading,
+              aboutLabel: content.source.heading,
               verbatimsHeading: content.verbatims.heading,
               verbatimsNote: content.verbatims.note,
               roles: content.verbatims.roles,
             }}
+            about={about}
             basePath={basePath}
             urlMode={urlMode}
             preserve={preserve}
@@ -58,41 +80,16 @@ export default function DictionaryPage({ content, view, basePath, urlMode, prese
           />
         </Suspense>
       ) : (
-        <div className="mx-auto max-w-wide px-gutter pt-10 pb-16 sm:pt-14">
-          <h1 className="text-[clamp(1.875rem,1.5rem+1.2vw,2.75rem)] font-bold leading-tight tracking-tight text-ink">{intro.heading}</h1>
-          <div className="mt-10 max-w-2xl border-t border-border pt-8">
-            <h2 className="text-subheading font-semibold text-ink">{content.unavailable.heading}</h2>
-            <p className="mt-3 text-body leading-relaxed text-ink-muted">
+        <div className={`${DICTIONARY_CONTAINER} pt-3 pb-16 sm:pt-5`}>
+          <DictionaryHeader title={intro.heading} aboutLabel={content.source.heading} about={about} defaultOpen />
+          <div className="mt-6 max-w-2xl border-t border-dict-rule pt-6">
+            <h2 className="text-lg font-semibold text-ink">{content.unavailable.heading}</h2>
+            <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-muted">
               <RichText text={content.unavailable.body} />
             </p>
           </div>
         </div>
       )}
-
-      <section aria-labelledby="dictionary-about" className="border-t border-border bg-paper-alt">
-        <div className="mx-auto grid max-w-wide gap-x-grid-gap gap-y-6 px-gutter py-14 md:py-16 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
-          <div>
-            <TriMark className="mb-4" />
-            <h2 id="dictionary-about" className="text-lg font-semibold tracking-tight text-ink">
-              {content.source.heading}
-            </h2>
-          </div>
-          <div className="max-w-[68ch] space-y-4 text-[0.9375rem] leading-relaxed text-ink-muted">
-            <p>
-              <RichText text={intro.description} />
-            </p>
-            <p>
-              <RichText text={content.source.body} />
-            </p>
-            {view?.release && (
-              <p className="pt-1 text-xs tracking-wide text-ink-muted">
-                Dictionary version {view.release.number}
-                {view.release.publishedAt && <> · published {dateFormatter.format(new Date(view.release.publishedAt))}</>}
-              </p>
-            )}
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
@@ -104,11 +101,13 @@ export function filtersFromSearchParams(params: Record<string, string | string[]
     return (Array.isArray(value) ? value[0] : value)?.slice(0, 200) ?? "";
   };
   const sort = one("sort");
+  // "source" is the old name for dictionary order, kept so earlier links still work.
+  const sortChoice: SortChoice = sort === "alpha" || sort === "relevance" ? sort : "auto";
   return {
     q: one("q"),
     category: one("category") || null,
     group: one("group") || null,
-    sort: sort === "source" || sort === "alpha" ? sort : "auto",
+    sort: sortChoice,
     translatedOnly: one("translated") === "1",
   };
 }

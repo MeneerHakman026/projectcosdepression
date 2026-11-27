@@ -5,96 +5,93 @@ import { toneVars, type CategoryTone } from "@/lib/dictionary/category-colors";
 import { FIELD_LABELS, type TextField } from "@/lib/dictionary/model";
 import { highlightRanges, snippet, type SearchResult } from "@/lib/dictionary/search";
 import type { ViewCategory, ViewGroup, ViewOutcome } from "@/lib/dictionary/view";
+import { EnMark } from "./CategoryNav";
 import Highlighted from "./Highlighted";
 
 const RESULT_FIELDS: TextField[] = ["definition", "experience", "verbatims"];
 
+export type IndexSection = {
+  category: ViewCategory;
+  groups: { group: ViewGroup; outcomes: ViewOutcome[] }[];
+};
+
 type OutcomeIndexProps = {
-  /** "index": the full-width overview. "rail": the compact list beside an open entry. */
-  variant: "index" | "rail";
-  results: ViewOutcome[];
-  /** Group results under their category and group domain (dictionary order). */
-  grouped: boolean;
+  /** Category sections with their group cards, or a flat ranked list (best match). */
+  layout: { kind: "sections"; sections: IndexSection[] } | { kind: "ranked"; outcomes: ViewOutcome[] };
   categoryByKey: Map<string, ViewCategory>;
   groupByKey: Map<string, ViewGroup>;
   tones: Map<string, CategoryTone>;
   search: SearchResult | null;
   selectedId: string | null;
   languageName: string;
+  /** The group domain shown on its own (wide screens), if any. */
+  focusedGroup: string | null;
+  /** Group domains expanded on small screens. */
+  openGroups: ReadonlySet<string>;
   hrefFor: (id: string) => string;
   onSelect: (event: MouseEvent<HTMLAnchorElement>, id: string) => void;
+  onFocusGroup: (groupKey: string | null) => void;
+  onToggleGroup: (groupKey: string) => void;
 };
 
-type Section = { categoryKey: string; groups: { groupKey: string; outcomes: ViewOutcome[] }[] };
-
-/** Consecutive runs of the same category and group, in result order. */
-function sections(results: ViewOutcome[]): Section[] {
-  const out: Section[] = [];
-  for (const outcome of results) {
-    let section = out[out.length - 1];
-    if (!section || section.categoryKey !== outcome.categoryKey) {
-      section = { categoryKey: outcome.categoryKey, groups: [] };
-      out.push(section);
-    }
-    let group = section.groups[section.groups.length - 1];
-    if (!group || group.groupKey !== outcome.groupKey) {
-      group = { groupKey: outcome.groupKey, outcomes: [] };
-      section.groups.push(group);
-    }
-    group.outcomes.push(outcome);
-  }
-  return out;
-}
-
-/**
- * Never more index columns than there is content for: a filter that leaves one
- * or two group domains shouldn't leave empty columns beside them. A single
- * group flows its own outcomes into columns once it has enough of them.
- */
-function groupColumns(groups: number): string {
-  if (groups >= 3) return "sm:columns-2 xl:columns-3";
-  return groups === 2 ? "sm:columns-2" : "";
-}
-
-function itemColumns(outcomes: number): string {
-  if (outcomes > 10) return "sm:columns-2 xl:columns-3";
-  return outcomes > 5 ? "sm:columns-2" : "";
-}
-
-function Count({ n }: { n: number }) {
+function Count({ n, className = "" }: { n: number; className?: string }) {
   return (
-    <span className="tabular-nums font-normal text-ink-muted">
+    <span className={`tabular-nums font-normal text-ink-muted ${className}`}>
       {n}
       <span className="sr-only"> {n === 1 ? "outcome" : "outcomes"}</span>
     </span>
   );
 }
 
+/** Never more columns of cards than there are cards. */
+function cardColumns(groups: number): string {
+  if (groups >= 3) return "columns-[3_17.5rem]";
+  return groups === 2 ? "columns-[2_17.5rem]" : "";
+}
+
+/** A group shown on its own flows its outcomes into columns once it has enough of them. */
+function itemColumns(outcomes: number): string {
+  if (outcomes > 10) return "columns-[3_15rem]";
+  return outcomes > 5 ? "columns-[2_15rem]" : "";
+}
+
+const CARD =
+  "break-inside-avoid rounded-lg border border-dict-card border-t-2 border-t-[var(--cat-text)] bg-paper px-1 sm:px-1.5 sm:pt-0.5 sm:pb-1.5";
+
+const GROUP_BUTTON =
+  "w-full items-center gap-2 rounded px-3 py-1 text-left font-semibold leading-[1.35] text-ink transition-colors duration-150 hover:bg-dict-hover-soft";
+
+/**
+ * The dictionary index: every outcome under its category and group domain,
+ * as group cards. On wide screens each card header shows that group on its
+ * own (and back); on small screens the cards are an accordion.
+ */
 export default function OutcomeIndex({
-  variant,
-  results,
-  grouped,
+  layout,
   categoryByKey,
   groupByKey,
   tones,
   search,
   selectedId,
   languageName,
+  focusedGroup,
+  openGroups,
   hrefFor,
   onSelect,
+  onFocusGroup,
+  onToggleGroup,
 }: OutcomeIndexProps) {
   const highlight = search?.highlight ?? null;
-  const rail = variant === "rail";
 
   function excerptOf(outcome: ViewOutcome): ReactNode {
     const hit = search?.hits.get(outcome.id);
     const field = hit?.fields.find((f) => RESULT_FIELDS.includes(f));
     if (!hit || !field || hit.fields.includes("outcomeDomain")) return null;
     const text = outcome[field].text;
-    const excerpt = snippet(text, highlightRanges(text, highlight), rail ? 30 : 50, rail ? 70 : 110);
+    const excerpt = snippet(text, highlightRanges(text, highlight), 40, 90);
     if (!excerpt) return null;
     return (
-      <span className={`mt-1 block leading-snug text-ink-muted ${rail ? "text-[0.8125rem]" : "text-sm"}`}>
+      <span className="mt-0.5 block text-[0.8125rem] leading-snug text-ink-muted">
         <span className="mr-1 text-[0.625rem] font-semibold uppercase tracking-[0.12em]">{FIELD_LABELS[field]}</span>
         {excerpt.leading && "…"}
         <Highlighted text={excerpt.text} ranges={excerpt.ranges} />
@@ -108,43 +105,23 @@ export default function OutcomeIndex({
     const category = categoryByKey.get(outcome.categoryKey);
     const group = groupByKey.get(outcome.groupKey);
     return (
-      <li key={outcome.id} style={showContext ? toneVars(tones.get(outcome.categoryKey)) : undefined} className="break-inside-avoid">
+      <li key={outcome.id} className="break-inside-avoid" style={showContext ? toneVars(tones.get(outcome.categoryKey)) : undefined}>
         <a
           id={`result-${outcome.id}`}
           href={hrefFor(outcome.id)}
           onClick={(event) => onSelect(event, outcome.id)}
           aria-current={selected ? "true" : undefined}
-          className={
-            rail
-              ? `group relative -mx-3 block rounded-r-[3px] px-3 py-2 transition-colors duration-150 ${
-                  selected ? "bg-[var(--cat-soft)]" : "hover:bg-paper-alt"
-                }`
-              : "group -mx-2 block rounded-[3px] px-2 py-1.5 transition-colors duration-150 hover:bg-[var(--cat-soft)]"
-          }
+          className={`block min-h-11 rounded px-3 py-2.5 text-[0.9375rem] leading-[1.45] transition-colors duration-150 hover:bg-dict-hover hover:text-ink sm:min-h-[1.875rem] sm:py-1 ${
+            selected ? "bg-dict-hover font-medium text-ink" : "text-dict-ink-soft"
+          }`}
         >
-          {rail && (
-            <span
-              aria-hidden="true"
-              className={`absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-[var(--cat-line)] transition-opacity duration-150 ${
-                selected ? "opacity-100" : "opacity-0 group-hover:opacity-40"
-              }`}
-            />
-          )}
-          <span
-            className={`block leading-snug ${rail ? "text-[0.9375rem]" : "text-[1rem]"} ${
-              selected ? "font-semibold text-ink" : "text-ink group-hover:text-[var(--cat-text)]"
-            } transition-colors duration-150`}
-          >
+          <span lang={outcome.outcomeDomain.fallback ? "en" : undefined}>
             <Highlighted text={outcome.outcomeDomain.text} highlight={highlight} />
-            {outcome.outcomeDomain.fallback && (
-              <span className="ml-1.5 align-[0.1em] text-[0.625rem] font-semibold text-ink-muted" title={`Not yet translated into ${languageName}`}>
-                EN
-              </span>
-            )}
+            {outcome.outcomeDomain.fallback && <EnMark languageName={languageName} />}
           </span>
           {showContext && (
             <span className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-muted">
-              <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-[var(--cat-line)]" />
+              <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-[var(--cat-text)]" />
               <span className="truncate">
                 {category?.label.text} · {group?.label.text}
               </span>
@@ -156,76 +133,97 @@ export default function OutcomeIndex({
     );
   }
 
-  // ---- Flat results (best match, A–Z) ----------------------------------------
-  if (!grouped) {
+  // ---- Best match: one ranked list ---------------------------------------------
+  if (layout.kind === "ranked") {
     return (
-      <ol
-        aria-label="Outcomes"
-        className={rail ? "space-y-0.5" : "grid gap-x-10 gap-y-3 sm:grid-cols-2 xl:grid-cols-3"}
+      <div
+        className={`rounded-lg border border-dict-card border-t-2 border-t-ink bg-paper px-1 py-1.5 sm:px-1.5 ${
+          itemColumns(layout.outcomes.length) ? "" : "sm:max-w-[23.5rem]"
+        }`}
       >
-        {results.map((outcome) => item(outcome, true))}
-      </ol>
-    );
-  }
-
-  // ---- Grouped by category and group domain ------------------------------------
-  if (rail) {
-    return (
-      <div>
-        {sections(results).map((section) => (
-          <div key={section.categoryKey} style={toneVars(tones.get(section.categoryKey))} className="mt-6 first:mt-0">
-            <p className="flex items-center gap-2 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-[var(--cat-text)]">
-              <span aria-hidden="true" className="size-1.5 rounded-full bg-[var(--cat-line)]" />
-              {categoryByKey.get(section.categoryKey)?.label.text}
-            </p>
-            {section.groups.map((group) => (
-              <div key={group.groupKey} className="mt-3">
-                <p lang={groupByKey.get(group.groupKey)?.label.fallback ? "en" : undefined} className="text-xs font-medium text-ink-muted">
-                  {groupByKey.get(group.groupKey)?.label.text}
-                </p>
-                <ul className="mt-1 space-y-px">
-                  {group.outcomes.map((outcome) => item(outcome, false))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        ))}
+        <ol aria-label="Outcomes, best match first" className={`gap-x-4 ${itemColumns(layout.outcomes.length)}`}>
+          {layout.outcomes.map((outcome) => item(outcome, true))}
+        </ol>
       </div>
     );
   }
 
+  // ---- Category sections with group cards ----------------------------------------
+  const searching = search !== null;
   return (
-    <div className="space-y-12 sm:space-y-14">
-      {sections(results).map((section) => {
-        const category = categoryByKey.get(section.categoryKey);
-        const shown = section.groups.reduce((n, g) => n + g.outcomes.length, 0);
-        const headingId = `index-${category?.slug ?? section.categoryKey}`;
+    <div>
+      {layout.sections.map(({ category, groups }) => {
+        const shown = groups.reduce((n, g) => n + g.outcomes.length, 0);
+        const headingId = `index-${category.slug}`;
+        const single = groups.length === 1;
         return (
-          <section key={section.categoryKey} aria-labelledby={headingId} style={toneVars(tones.get(section.categoryKey))}>
-            <h2
-              id={headingId}
-              className="flex items-baseline gap-3 border-b border-[var(--cat-tint)] pb-3 text-lg font-semibold tracking-tight text-ink"
-            >
-              <span aria-hidden="true" className="size-2.5 shrink-0 translate-y-[-0.1em] self-center rounded-full bg-[var(--cat-line)]" />
-              <span lang={category?.label.fallback ? "en" : undefined}>{category?.label.text}</span>
-              <span className="text-sm">
-                <Count n={shown} />
-              </span>
-            </h2>
-            <div className={`mt-6 gap-x-12 2xl:gap-x-16 ${groupColumns(section.groups.length)}`}>
-              {section.groups.map((group) => {
-                const info = groupByKey.get(group.groupKey);
-                const single = section.groups.length === 1;
+          <section key={category.key} aria-labelledby={headingId} style={toneVars(tones.get(category.key))} className="mt-[1.125rem] sm:mt-5">
+            <div className="mb-2.5 flex items-center gap-2.5 sm:mb-3">
+              <span aria-hidden="true" className="h-[1.125rem] w-1 shrink-0 rounded-sm bg-[var(--cat-text)]" />
+              <h2 id={headingId} lang={category.label.fallback ? "en" : undefined} className="text-lg font-bold tracking-[-0.01em] text-ink sm:text-xl">
+                {category.label.text}
+                {category.label.fallback && <EnMark languageName={languageName} />}
+              </h2>
+              <Count n={shown} className="text-[0.8125rem]" />
+              <span aria-hidden="true" className="h-px flex-1 bg-dict-rule" />
+            </div>
+
+            <div className={`gap-x-4 ${cardColumns(groups.length)}`}>
+              {groups.map(({ group, outcomes }) => {
+                const focused = focusedGroup === group.key;
+                const expanded = searching || focused || openGroups.has(group.key);
+                const listId = `group-${group.slug}`;
+                const name = (
+                  <span className="flex-1" lang={group.label.fallback ? "en" : undefined}>
+                    {group.label.text}
+                    {group.label.fallback && <EnMark languageName={languageName} />}
+                  </span>
+                );
                 return (
-                  <div key={group.groupKey} className="mb-8 break-inside-avoid">
-                    <h3 className={`flex items-baseline gap-3 ${single ? "" : "justify-between"} text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-[var(--cat-text)]`}>
-                      <span lang={info?.label.fallback ? "en" : undefined}>{info?.label.text}</span>
-                      <Count n={group.outcomes.length} />
+                  <article
+                    key={group.key}
+                    // A group shown on its own keeps the width of one column until its outcomes need more.
+                    className={`mb-2.5 sm:mb-4 ${CARD} ${single && !itemColumns(outcomes.length) ? "sm:max-w-[23.5rem]" : ""}`}
+                  >
+                    <h3>
+                      {/* Wide screens: show this group on its own, and back. */}
+                      <button
+                        type="button"
+                        aria-pressed={focused}
+                        onClick={() => onFocusGroup(focused ? null : group.key)}
+                        className={`${GROUP_BUTTON} hidden min-h-[2.625rem] text-base sm:flex`}
+                      >
+                        {name}
+                        <Count n={outcomes.length} className="text-[0.8125rem]" />
+                        <span className="sr-only">{focused ? ", shown on its own. Show all groups" : ". Show only this group"}</span>
+                        <span aria-hidden="true" className="w-3.5 text-center text-lg font-normal text-[var(--cat-text)]">
+                          {focused ? "×" : "›"}
+                        </span>
+                      </button>
+                      {/* Small screens: expand and collapse. */}
+                      <button
+                        type="button"
+                        aria-expanded={expanded}
+                        aria-controls={listId}
+                        onClick={() => onToggleGroup(group.key)}
+                        className={`${GROUP_BUTTON} flex min-h-[3.125rem] text-[0.9375rem] sm:hidden`}
+                      >
+                        {name}
+                        <Count n={outcomes.length} className="text-[0.8125rem]" />
+                        <span aria-hidden="true" className="w-3.5 text-center text-lg font-normal text-[var(--cat-text)]">
+                          {expanded ? "−" : "+"}
+                        </span>
+                      </button>
                     </h3>
-                    <ul className={`mt-2 gap-x-12 2xl:gap-x-16 ${single ? itemColumns(group.outcomes.length) : ""}`}>
-                      {group.outcomes.map((outcome) => item(outcome, false))}
+                    <ul
+                      id={listId}
+                      className={`gap-x-4 border-t border-dict-rule-soft pt-1 ${single ? itemColumns(outcomes.length) : ""} ${
+                        expanded ? "" : "max-sm:hidden"
+                      }`}
+                    >
+                      {outcomes.map((outcome) => item(outcome, false))}
                     </ul>
-                  </div>
+                  </article>
                 );
               })}
             </div>

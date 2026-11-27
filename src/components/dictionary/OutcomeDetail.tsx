@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, type MouseEvent, type ReactNode, type Ref } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import RichText from "@/components/RichText";
 import type { ParticipantRole } from "@/content/dictionary/schema";
 import { toneVars, type CategoryTone } from "@/lib/dictionary/category-colors";
 import type { SearchResult } from "@/lib/dictionary/search";
+import { KEY_SEPARATOR } from "@/lib/dictionary/taxonomy";
+import { labelKey } from "@/lib/dictionary/text";
 import { parseVerbatims } from "@/lib/dictionary/verbatims";
 import type { LocalizedText, ViewCategory, ViewGroup, ViewOutcome } from "@/lib/dictionary/view";
 import Highlighted from "./Highlighted";
-import Verbatims, { roleMarker } from "./Verbatims";
+import Verbatims from "./Verbatims";
 
 export type NeighbourLink = { id: string; title: string; href: string } | null;
 
@@ -27,11 +29,21 @@ type OutcomeDetailProps = {
   previous: NeighbourLink;
   next: NeighbourLink;
   shareUrl: string;
-  headingRef: Ref<HTMLHeadingElement>;
   onNavigate: (event: MouseEvent<HTMLAnchorElement>, id: string) => void;
-  backHref: string;
-  onBack: (event: MouseEvent<HTMLAnchorElement>) => void;
+  onClose: () => void;
 };
+
+/**
+ * Group domains whose entries also point to crisis support. Matched on the
+ * group's key (from the English workbook label, in any category), like the
+ * preferred category colours: if the group is renamed, the line simply
+ * doesn't show.
+ */
+const SUPPORT_GROUPS = [labelKey("Autoaggression symptoms")];
+
+function offersSupport(groupKey: string): boolean {
+  return SUPPORT_GROUPS.some((key) => groupKey.endsWith(`${KEY_SEPARATOR}${key}`));
+}
 
 function FallbackNote({ languageName }: { languageName: string }) {
   return (
@@ -46,18 +58,18 @@ function langOf(text: LocalizedText, language: string, master: string) {
   return text.fallback ? master : language;
 }
 
-/** One entry row: a small label in the margin (wide panes) or above (narrow), and its text. */
-function EntrySection({ id, title, children }: { id: string; title: string; children: ReactNode }) {
-  return (
-    <section aria-labelledby={id} className="grid gap-y-2.5 @2xl:grid-cols-[9.5rem_minmax(0,1fr)] @2xl:gap-x-10">
-      <h3 id={id} className="pt-[0.35em] text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-ink-muted">
-        {title}
-      </h3>
-      <div className="min-w-0">{children}</div>
-    </section>
-  );
-}
+const LABEL = "text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted";
 
+/**
+ * One dictionary entry, in a modal sheet over the index: from the right on
+ * wide screens, from the bottom on small ones. The open entry lives in the
+ * URL (see DictionaryExplorer), so this component only shows it; closing
+ * (×, Escape, the backdrop) asks the explorer to change the URL.
+ *
+ * A native <dialog> provides the focus trap, the inert page behind it and
+ * Escape. A deep link is server-rendered open (data-ssr-open, see
+ * globals.css) and becomes modal as soon as it hydrates.
+ */
 export default function OutcomeDetail({
   outcome,
   category,
@@ -73,15 +85,38 @@ export default function OutcomeDetail({
   previous,
   next,
   shareUrl,
-  headingRef,
   onNavigate,
-  backHref,
-  onBack,
+  onClose,
 }: OutcomeDetailProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const [copied, setCopied] = useState<"idle" | "copied" | "failed">("idle");
   const headingId = `outcome-${outcome.id}-heading`;
   // Attributed quotes already name their participant group, so the legend is only needed for unattributed text.
   const attributed = parseVerbatims(outcome.verbatims.text, roles.map((role) => role.code)).kind === "attributed";
+  const support = offersSupport(outcome.groupKey);
+
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+    // Modal now: the server-rendered stand-in (see globals.css) is no longer
+    // needed. React never sets this attribute again, as its value doesn't change.
+    dialog?.removeAttribute("data-ssr-open");
+    return () => {
+      if (dialog?.open) dialog.close();
+    };
+  }, []);
+
+  // Moving to another entry: start at its top, and announce its title.
+  const shownId = useRef(outcome.id);
+  useEffect(() => {
+    if (shownId.current === outcome.id) return;
+    shownId.current = outcome.id;
+    setCopied("idle");
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
+    headingRef.current?.focus({ preventScroll: true });
+  }, [outcome.id]);
 
   async function copyLink() {
     try {
@@ -94,154 +129,172 @@ export default function OutcomeDetail({
   }
 
   return (
-    <article aria-labelledby={headingId} style={toneVars(tone)} className="@container pb-4">
-      <div className="flex min-h-11 items-center justify-between gap-3">
-        <a
-          href={backHref}
-          onClick={onBack}
-          className="group -ml-2 inline-flex min-h-11 items-center gap-2 rounded-sm px-2 text-sm font-medium text-ink-muted transition-colors hover:text-ink"
-        >
-          <span aria-hidden="true" className="transition-transform duration-150 group-hover:-translate-x-0.5">
-            ←
-          </span>
-          All outcomes
-        </a>
-        <div className="flex items-center gap-1">
-          <span className="font-mono text-xs text-ink-muted" title="Permanent outcome ID">
-            {outcome.id}
-          </span>
+    <dialog
+      ref={dialogRef}
+      aria-labelledby={headingId}
+      data-ssr-open=""
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onClick={(event) => {
+        // A click on the dialog element itself is a click on the backdrop.
+        if (event.target === event.currentTarget) onClose();
+      }}
+      style={toneVars(tone)}
+      className="dictionary-entry fixed inset-x-0 top-6 bottom-0 m-0 h-auto max-h-none w-full max-w-none overflow-hidden rounded-t-xl border-0 bg-paper p-0 text-ink shadow-[0_0_40px_rgb(31_42_68/0.16)] motion-safe:animate-[sheet-in-up_240ms_ease-out] sm:top-0 sm:left-auto sm:h-dvh sm:w-[36.25rem] sm:max-w-full sm:rounded-none sm:motion-safe:animate-[sheet-in-right_240ms_ease-out]"
+    >
+      <div className="flex h-full flex-col">
+        <div className="flex flex-none items-center justify-between gap-3 border-b border-border py-2.5 pr-3 pl-5 sm:pr-10 sm:pl-12">
+          <p className="flex min-w-0 items-center gap-2.5 text-xs leading-normal text-ink-muted">
+            <span aria-hidden="true" className="h-7 w-[3px] flex-none bg-[var(--cat-text)]" />
+            <span>
+              <span lang={category?.label.fallback ? masterLanguage : undefined}>{category?.label.text}</span>
+              {group && (
+                <>
+                  <span aria-hidden="true"> › </span>
+                  <span className="sr-only">, </span>
+                  <span lang={group.label.fallback ? masterLanguage : undefined}>{group.label.text}</span>
+                </>
+              )}
+            </span>
+          </p>
           <button
             type="button"
-            onClick={copyLink}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-sm px-2 text-sm font-medium text-ink-muted transition-colors hover:text-ink"
+            onClick={onClose}
+            className="inline-flex size-11 flex-none items-center justify-center rounded text-2xl font-light text-ink transition-colors hover:bg-dict-hover"
           >
-            <svg aria-hidden="true" viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-              <path d="M8.5 11.5a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5l-1 1" />
-              <path d="M11.5 8.5a3.5 3.5 0 0 0-5 0L4 11a3.5 3.5 0 0 0 5 5l1-1" />
-            </svg>
-            {copied === "copied" ? "Link copied" : copied === "failed" ? "Couldn't copy" : "Copy link"}
-            <span className="sr-only"> to {outcome.outcomeDomain.text}</span>
+            <span aria-hidden="true">×</span>
+            <span className="sr-only">Close</span>
           </button>
-          <span role="status" className="sr-only">
-            {copied === "copied" ? "Link copied to clipboard" : copied === "failed" ? `Copy failed. The link is ${shareUrl}` : ""}
-          </span>
         </div>
-      </div>
 
-      <div key={outcome.id} className="motion-safe:animate-[entry-in_220ms_ease-out]">
-        <header className="mt-5 sm:mt-7">
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--cat-text,var(--color-accent))]">
-            <span aria-hidden="true" className="size-2 rounded-full bg-[var(--cat-line,var(--color-teal))]" />
-            <span lang={category?.label.fallback ? masterLanguage : undefined}>{category?.label.text}</span>
-            {group && (
-              <span lang={group.label.fallback ? masterLanguage : undefined} className="text-ink-muted">
-                <span aria-hidden="true" className="mr-2 font-normal text-ink-muted/60">
-                  /
-                </span>
-                <span className="sr-only">, </span>
-                {group.label.text}
+        <div ref={bodyRef} tabIndex={0} aria-labelledby={headingId} role="region" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-7 pb-10 focus-visible:outline-offset-[-2px] sm:px-12">
+          <div key={outcome.id} className="motion-safe:animate-[entry-in_200ms_ease-out]">
+            <h2
+              id={headingId}
+              ref={headingRef}
+              tabIndex={-1}
+              lang={langOf(outcome.outcomeDomain, language, masterLanguage)}
+              className="text-[2rem] font-bold leading-[1.15] tracking-[-0.02em] text-balance [overflow-wrap:anywhere] focus:outline-none sm:text-[2.5rem]"
+            >
+              <Highlighted text={outcome.outcomeDomain.text} highlight={highlight} />
+            </h2>
+            {outcome.outcomeDomain.fallback && <FallbackNote languageName={languageName} />}
+
+            <div className="mt-1.5 mb-6 flex items-center gap-4">
+              <span className="text-xs text-ink-muted" title="Permanent outcome ID">
+                {outcome.id}
               </span>
-            )}
-          </p>
-
-          <h2
-            id={headingId}
-            ref={headingRef}
-            tabIndex={-1}
-            lang={langOf(outcome.outcomeDomain, language, masterLanguage)}
-            className="mt-3 text-[clamp(2rem,1.55rem+1.6vw,3rem)] font-bold leading-[1.08] tracking-[-0.02em] text-balance text-ink [overflow-wrap:anywhere] focus:outline-none"
-          >
-            <Highlighted text={outcome.outcomeDomain.text} highlight={highlight} />
-          </h2>
-          {outcome.outcomeDomain.fallback && <FallbackNote languageName={languageName} />}
-          <span aria-hidden="true" className="mt-6 block h-0.5 w-12 bg-[var(--cat-line,var(--color-teal))]" />
-        </header>
-
-        <div className="mt-8 space-y-9 sm:mt-10 sm:space-y-10">
-          {outcome.definition.text && (
-            <EntrySection id={`${headingId}-definition`} title="Definition">
-              <p
-                lang={langOf(outcome.definition, language, masterLanguage)}
-                className="max-w-[60ch] whitespace-pre-line text-[clamp(1.1875rem,1.1rem+0.35vw,1.375rem)] leading-[1.55] text-ink"
+              <button
+                type="button"
+                onClick={copyLink}
+                className="min-h-11 text-[0.8125rem] font-medium text-ink underline decoration-1 underline-offset-[3px] transition-colors hover:text-accent"
               >
-                <Highlighted text={outcome.definition.text} highlight={highlight} />
-              </p>
-              {outcome.definition.fallback && <FallbackNote languageName={languageName} />}
-            </EntrySection>
-          )}
+                {copied === "copied" ? "Link copied" : copied === "failed" ? "Couldn't copy" : "Copy link"}
+                <span className="sr-only"> to {outcome.outcomeDomain.text}</span>
+              </button>
+              <span role="status" className="sr-only">
+                {copied === "copied" ? "Link copied to clipboard" : copied === "failed" ? `Copy failed. The link is ${shareUrl}` : ""}
+              </span>
+            </div>
 
-          {outcome.experience.text && (
-            <EntrySection id={`${headingId}-experience`} title="Experience">
-              <p
-                lang={langOf(outcome.experience, language, masterLanguage)}
-                className="max-w-[66ch] whitespace-pre-line text-body leading-[1.7] text-ink/85"
-              >
-                <Highlighted text={outcome.experience.text} highlight={highlight} />
-              </p>
-              {outcome.experience.fallback && <FallbackNote languageName={languageName} />}
-            </EntrySection>
-          )}
-
-          {outcome.verbatims.text && (
-            <EntrySection id={`${headingId}-verbatims`} title={verbatimsHeading}>
-              {outcome.verbatims.fallback && (
-                <div className="mb-3">
-                  <FallbackNote languageName={languageName} />
-                </div>
-              )}
-              <div className="max-w-[64ch] rounded-[3px] border-l-2 border-[var(--cat-tint,var(--color-border))] bg-[color-mix(in_srgb,var(--cat-soft,var(--color-paper-alt))_45%,white)] px-5 py-6 sm:px-8 sm:py-7">
-                <Verbatims
-                  text={outcome.verbatims.text}
-                  lang={langOf(outcome.verbatims, language, masterLanguage)}
-                  roles={roles}
-                  highlight={highlight}
-                />
-              </div>
-              <div className="mt-4 max-w-[64ch] space-y-2 text-xs leading-relaxed text-ink-muted">
-                <p>
-                  <RichText text={verbatimsNote} />
+            {outcome.definition.text && (
+              <section aria-labelledby={`${headingId}-definition`} className="mb-8">
+                <h3 id={`${headingId}-definition`} className={LABEL}>
+                  Definition
+                </h3>
+                <p
+                  lang={langOf(outcome.definition, language, masterLanguage)}
+                  className="mt-2.5 whitespace-pre-line text-[1.1875rem] leading-[1.55] sm:text-[1.3125rem]"
+                >
+                  <Highlighted text={outcome.definition.text} highlight={highlight} />
                 </p>
-                {roles.length > 0 && !attributed && (
-                  <dl className="flex flex-wrap gap-x-5 gap-y-1">
-                    {roles.map((role) => (
-                      <div key={role.code} className="flex items-center gap-1.5">
-                        <span aria-hidden="true" className={`h-0.5 w-3 ${roleMarker(roles, role.code)}`} />
-                        <dt className="font-semibold text-ink">{role.code}</dt>
-                        <dd>{role.label}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-              </div>
-            </EntrySection>
-          )}
-        </div>
-      </div>
+                {outcome.definition.fallback && <FallbackNote languageName={languageName} />}
+              </section>
+            )}
 
-      <nav aria-label="Other outcomes" className="mt-12 grid grid-cols-2 gap-4 border-t border-border pt-5">
-        {previous ? (
-          <a
-            href={previous.href}
-            onClick={(event) => onNavigate(event, previous.id)}
-            className="group -m-2 block rounded-sm p-2 text-left"
-          >
-            <span className="block text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-ink-muted">← Previous</span>
-            <span className="mt-1 block font-medium text-ink transition-colors group-hover:text-[var(--cat-text,var(--color-accent))]">
-              {previous.title}
-            </span>
-          </a>
-        ) : (
-          <span />
-        )}
-        {next && (
-          <a href={next.href} onClick={(event) => onNavigate(event, next.id)} className="group -m-2 block rounded-sm p-2 text-right">
-            <span className="block text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-ink-muted">Next →</span>
-            <span className="mt-1 block font-medium text-ink transition-colors group-hover:text-[var(--cat-text,var(--color-accent))]">
-              {next.title}
-            </span>
-          </a>
-        )}
-      </nav>
-    </article>
+            {outcome.experience.text && (
+              <section aria-labelledby={`${headingId}-experience`} className="mb-8">
+                <h3 id={`${headingId}-experience`} className={LABEL}>
+                  Experience
+                </h3>
+                <p lang={langOf(outcome.experience, language, masterLanguage)} className="mt-2.5 whitespace-pre-line text-base leading-[1.75]">
+                  <Highlighted text={outcome.experience.text} highlight={highlight} />
+                </p>
+                {outcome.experience.fallback && <FallbackNote languageName={languageName} />}
+              </section>
+            )}
+
+            {outcome.verbatims.text && (
+              <section aria-labelledby={`${headingId}-verbatims`} className="border-t border-border pt-7">
+                <div className="flex items-baseline justify-between gap-3">
+                  <h3 id={`${headingId}-verbatims`} className={LABEL}>
+                    {verbatimsHeading}
+                  </h3>
+                  <span className="text-[0.8125rem] text-ink-muted">Verbatims</span>
+                </div>
+                {outcome.verbatims.fallback && <FallbackNote languageName={languageName} />}
+                <div className="mt-5">
+                  <Verbatims
+                    text={outcome.verbatims.text}
+                    lang={langOf(outcome.verbatims, language, masterLanguage)}
+                    roles={roles}
+                    highlight={highlight}
+                  />
+                </div>
+                <div className="mt-6 space-y-2 text-[0.8125rem] leading-relaxed text-ink-muted">
+                  <p>
+                    <RichText text={verbatimsNote} />
+                  </p>
+                  {roles.length > 0 && !attributed && (
+                    <dl className="flex flex-wrap gap-x-5 gap-y-1">
+                      {roles.map((role) => (
+                        <div key={role.code} className="flex gap-1.5">
+                          <dt className="font-semibold text-ink">{role.code}</dt>
+                          <dd>{role.label}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {support && (
+              <p className="mt-8 border-t border-border pt-5 text-sm leading-[1.6]">
+                Struggling right now? You can find free, local support at{" "}
+                <a href="https://findahelpline.com" target="_blank" rel="noopener noreferrer" className="font-semibold text-ink underline underline-offset-[3px]">
+                  findahelpline.com
+                </a>
+              </p>
+            )}
+          </div>
+        </div>
+
+        <nav aria-label="Previous and next outcome" className="flex flex-none gap-6 border-t border-border px-5 py-1 sm:px-12">
+          {previous ? (
+            <a
+              href={previous.href}
+              onClick={(event) => onNavigate(event, previous.id)}
+              className="group block min-h-16 min-w-0 flex-1 py-2 text-left"
+            >
+              <span className="block text-xs text-ink-muted">← Previous</span>
+              <span className="mt-0.5 block text-sm font-semibold text-ink group-hover:underline group-hover:underline-offset-[3px]">{previous.title}</span>
+            </a>
+          ) : (
+            <span className="flex-1" />
+          )}
+          {next ? (
+            <a href={next.href} onClick={(event) => onNavigate(event, next.id)} className="group block min-h-16 min-w-0 flex-1 py-2 text-right">
+              <span className="block text-xs text-ink-muted">Next →</span>
+              <span className="mt-0.5 block text-sm font-semibold text-ink group-hover:underline group-hover:underline-offset-[3px]">{next.title}</span>
+            </a>
+          ) : (
+            <span className="flex-1" />
+          )}
+        </nav>
+      </div>
+    </dialog>
   );
 }
