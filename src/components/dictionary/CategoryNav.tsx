@@ -3,6 +3,7 @@
 import type { CategoryTone } from "@/lib/dictionary/category-colors";
 import { toneVars } from "@/lib/dictionary/category-colors";
 import type { ViewCategory } from "@/lib/dictionary/view";
+import { useUiText } from "./ui-text";
 
 type CategoryNavProps = {
   label: string;
@@ -19,8 +20,9 @@ type CategoryNavProps = {
 };
 
 export function EnMark({ languageName }: { languageName: string }) {
+  const t = useUiText();
   return (
-    <span className="ml-1.5 align-[0.1em] text-[0.625rem] font-semibold tracking-wide text-ink-muted" title={`Not yet translated into ${languageName}`}>
+    <span className="ml-1.5 align-[0.1em] text-[0.625rem] font-semibold tracking-wide text-ink-muted" title={t.notYetTranslated(languageName)}>
       EN
     </span>
   );
@@ -43,10 +45,11 @@ export default function CategoryNav({
   languageName,
   onSelect,
 }: CategoryNavProps) {
+  const t = useUiText();
   const allCount = filtered ? categories.reduce((sum, c) => sum + (matching.get(c.key) ?? 0), 0) : total;
 
   const tab = (selected: boolean) =>
-    `relative inline-flex min-h-11 shrink-0 items-center gap-1.5 text-[0.9375rem] font-medium text-ink transition-colors duration-150 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:transition-opacity after:duration-150 ${
+    `relative inline-flex min-h-11 shrink-0 items-center gap-1.5 text-[0.9375rem] font-medium lg:text-[length:var(--dict-tab)] text-ink transition-colors duration-150 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:transition-opacity after:duration-150 ${
       selected ? "after:opacity-100" : "after:opacity-0 hover:after:opacity-30"
     }`;
 
@@ -57,10 +60,10 @@ export default function CategoryNav({
       className="flex gap-x-[1.375rem] overflow-x-auto border-b border-dict-rule [scrollbar-width:none] sm:gap-x-7 [&::-webkit-scrollbar]:hidden"
     >
       <button type="button" aria-pressed={categoryKey === null} onClick={() => onSelect(null)} className={`${tab(categoryKey === null)} after:bg-ink`}>
-        All
+        {t.all}
         <span className="tabular-nums text-[0.8125rem] font-normal text-ink-muted">
           {allCount}
-          <span className="sr-only"> outcomes{filtered ? " match" : ""}</span>
+          <span className="sr-only">{t.countSuffix(allCount, filtered)}</span>
         </span>
       </button>
       {categories.map((category) => {
@@ -81,7 +84,7 @@ export default function CategoryNav({
             </span>
             <span className="tabular-nums text-[0.8125rem] font-normal text-ink-muted">
               {count}
-              <span className="sr-only"> outcomes{filtered ? " match" : ""}</span>
+              <span className="sr-only">{t.countSuffix(count, filtered)}</span>
             </span>
           </button>
         );

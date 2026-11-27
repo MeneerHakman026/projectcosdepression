@@ -22,7 +22,12 @@ export type ParsedVerbatims =
   | { kind: "attributed"; blocks: VerbatimBlock[] }
   | { kind: "raw"; text: string };
 
-const ROLE_LINE = /^\s*([A-Za-z]{2,8})\s*:\s*(\S[\s\S]*?)\s*$/;
+/**
+ * A leading role label: 1–8 letters, optional spaces (French typography puts
+ * one before the colon: "P : …"), a colon. Only codes in `roleCodes` count,
+ * so a one-letter code such as the French "P" can't match an ordinary word.
+ */
+const ROLE_LINE = /^\s*([A-Za-z]{1,8})\s*:\s*(\S[\s\S]*?)\s*$/;
 
 /**
  * @param roleCodes the participant-role abbreviations editors have defined

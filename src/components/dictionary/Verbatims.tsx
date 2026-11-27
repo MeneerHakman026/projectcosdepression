@@ -8,10 +8,12 @@ type VerbatimsProps = {
   lang: string;
   roles: readonly ParticipantRole[];
   highlight?: SearchResult["highlight"] | null;
+  /** The quotations' type size (the split view scales it on large screens). */
+  quoteClassName?: string;
 };
 
 const FIGURE = "border-l border-dict-quote py-0.5 pl-5";
-const QUOTE = "text-base leading-[1.75] text-ink";
+const QUOTE = "leading-[1.75] text-ink";
 
 /**
  * Participant quotations, each set off by a thin rule. When every line
@@ -20,14 +22,14 @@ const QUOTE = "text-base leading-[1.75] text-ink";
  * quotation text itself is never split, reordered or edited — the source's
  * own quotation marks are the only quotation marks shown.
  */
-export default function Verbatims({ text, lang, roles, highlight }: VerbatimsProps) {
+export default function Verbatims({ text, lang, roles, highlight, quoteClassName = "text-base" }: VerbatimsProps) {
   const parsed = parseVerbatims(text, roles.map((role) => role.code));
   if (parsed.kind === "empty") return null;
 
   if (parsed.kind === "raw") {
     return (
       <figure className={FIGURE}>
-        <blockquote lang={lang} className={`whitespace-pre-line ${QUOTE}`}>
+        <blockquote lang={lang} className={`whitespace-pre-line ${QUOTE} ${quoteClassName}`}>
           <Highlighted text={parsed.text} highlight={highlight} />
         </blockquote>
       </figure>
@@ -41,7 +43,7 @@ export default function Verbatims({ text, lang, roles, highlight }: VerbatimsPro
         return (
           <li key={`${index}-${block.role}`}>
             <figure className={FIGURE}>
-              <blockquote lang={lang} className={QUOTE}>
+              <blockquote lang={lang} className={`${QUOTE} ${quoteClassName}`}>
                 <Highlighted text={block.text} highlight={highlight} />
               </blockquote>
               <figcaption className="mt-2 text-[0.8125rem] text-ink-muted">

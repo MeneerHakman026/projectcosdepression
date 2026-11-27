@@ -247,15 +247,69 @@ describe("public Outcome Dictionary page", () => {
     const visible = text(html);
     expect(visible).toContain("Désir de vivre");
     expect(visible).toContain("Une motivation claire.");
-    expect(visible).toContain("Not yet translated into French — shown in English");
+    // The interface is French too (ui-text.ts), and says so of English fallback text.
+    expect(visible).toContain("Pas encore traduit en français — affiché en anglais");
     expect(html).toContain('lang="fr"');
     expect(html).toContain('lang="en"');
-    expect(visible).toContain("Showing the French translation where available");
+    // No general translation notice: only the EN marks beside untranslated text.
+    expect(visible).not.toContain("Traduction en français affichée");
+    expect(visible).not.toContain("translation where available");
     // The menu: the published languages by their own names only, without counts or status.
     expect(html).toMatch(/<option value="en" lang="en">English<\/option><option value="fr" lang="fr" selected="">Français<\/option><\/select>/);
     expect(html).not.toContain("(French)");
     const options = [...html.matchAll(/<option value="[a-z-]+" lang="[a-z-]+"[^>]*>([^<]*)<\/option>/gi)].map((m) => m[1]);
     expect(options).toEqual(["English", "Français"]);
+  });
+
+  it("localises the whole interface in French, leaving the scientific text as stored", () => {
+    const french: DictionaryContent = {
+      format: CONTENT_FORMAT,
+      master: { outcomes: source.master.outcomes },
+      translations: {
+        fr: {
+          categories: {},
+          groups: {},
+          outcomes: {
+            V_01: {
+              outcomeDomain: "Désir de vivre",
+              definition: "Une motivation claire.",
+              experience: "Un vécu inventé.",
+              verbatims: 'P : "Une citation inventée"\nPS : "Une autre citation"\nPr : "Une troisième citation"',
+              source: "0123456789abcdef",
+            },
+          },
+        },
+      },
+    };
+    const html = render(french, { path: "/dictionary/V_01", search: "lang=fr", language: "fr" });
+    const visible = text(html);
+    expect(html).toMatch(/<div lang="fr" class="dictionary-split/);
+    for (const label of ["Dictionnaire des critères de jugement", "Rechercher dans le dictionnaire", "80 critères", "Tous", "Trier", "Ordre du dictionnaire",
+      "Définition", "Vécu", "Avec leurs propres mots", "Copier le lien", "Suivant", "Fermer"]) {
+      expect(visible, label).toContain(label);
+    }
+    for (const english of ["Copy link", "Definition", "Experience", "In their own words", "Dictionary order", "Previous", "Next →", "Close"]) {
+      expect(visible, english).not.toContain(english);
+    }
+    expect(html).toMatch(/<p id="dictionary-status"[^>]*>80 critères<\/p>/);
+    // The About text comes from the CMS in English, and is marked as such.
+    expect(html).toMatch(/<div id="[^"]+" hidden="" lang="en"/);
+    // French verbatims are attributed with the French participant codes; each quotation is kept exactly as written.
+    expect(html).toContain('<abbr title="Professionnels de santé" class="no-underline">PS</abbr>');
+    for (const quote of ['"Une citation inventée"', '"Une autre citation"', '"Une troisième citation"']) {
+      expect(text(html.replace(/&quot;/g, '"'))).toContain(quote);
+    }
+    // English text shown as a fallback keeps the English codes and groups.
+    const fallback = text(render(french, { path: "/dictionary/V_02", search: "lang=fr", language: "fr" }));
+    expect(fallback).toContain("Pas encore traduit en français — affiché en anglais");
+  });
+
+  it("keeps the English interface and the CMS wording for English", () => {
+    const visible = text(render(source, { path: "/dictionary/V_01" }));
+    for (const label of ["Outcome Dictionary", "80 outcomes", "Definition", "Experience", "Copy link", "In their own words", "People with depression"]) {
+      expect(visible, label).toContain(label);
+    }
+    expect(visible).not.toContain("Définition");
   });
 
   it("shows the 'being prepared' message when nothing is published", () => {
