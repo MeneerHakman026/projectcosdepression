@@ -264,15 +264,43 @@ dialog.dictionary-entry::backdrop {
 
 /* Before hydration a deep-linked entry is server-rendered open (not yet
    modal); a wide shadow stands in for the backdrop so the page doesn't
-   flash between the HTML and the modal dialog. */
-dialog.dictionary-entry[data-ssr-open] {
-  display: flex;
-  box-shadow: 0 0 0 100vmax rgb(31 42 68 / 0.32);
-  z-index: 60;
+   flash between the HTML and the modal dialog. Only below the split-view
+   width: from 64rem the same entry is server-rendered inline instead. */
+@media not (min-width: 64rem) {
+  dialog.dictionary-entry[data-ssr-open] {
+    display: flex;
+    box-shadow: 0 0 0 100vmax rgb(31 42 68 / 0.32);
+    z-index: 60;
+  }
+
+  html:has(dialog.dictionary-entry[data-ssr-open]) {
+    overflow: hidden;
+  }
+}
+
+/* The sheet's close button sits on the category band: its focus ring takes
+   the band's text colour (≥ 4.5:1 on the band) instead of the site accent. */
+.dictionary-entry-close:focus-visible {
+  outline-color: currentColor;
+  outline-offset: -4px;
 }
 
 /* The page behind an open entry doesn't scroll. */
-html:has(dialog.dictionary-entry[open]),
-html:has(dialog.dictionary-entry[data-ssr-open]) {
+html:has(dialog.dictionary-entry[open]) {
   overflow: hidden;
+}
+
+/* Split view (from 64rem, Tailwind's lg; see components/dictionary/layout.ts):
+   the index and the entry fill the viewport below the sticky site header,
+   each scrolling on its own, so search and reading stay side by side. The
+   header's height is estimated from its tokens (logo + vertical padding +
+   border) and replaced by its measured height once the page hydrates. A
+   minimum keeps both panes usable on very short windows (the page then
+   scrolls as well). */
+@media (min-width: 64rem) {
+  .dictionary-split {
+    --site-header-h: calc(var(--spacing-logo-h) + 2 * var(--spacing-header-y) + 1px);
+    height: calc(100dvh - var(--site-header-h) - var(--dictionary-bottom-inset, 0px));
+    min-height: 32rem;
+  }
 }

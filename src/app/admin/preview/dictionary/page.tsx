@@ -77,6 +77,7 @@ export default async function DictionaryPreviewPage({ searchParams }: PageProps<
         urlMode="query"
         preserve={preserve}
         filters={filtersFromSearchParams(params)}
+        bottomInset="5rem"
       />
       <div className="h-20" aria-hidden="true" />
       <div role="region" aria-label="Preview notice" className="fixed inset-x-0 bottom-0 z-50 border-t-4 border-accent bg-navy text-paper">

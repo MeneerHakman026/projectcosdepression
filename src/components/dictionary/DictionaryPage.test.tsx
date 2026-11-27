@@ -104,6 +104,17 @@ describe("public Outcome Dictionary page", () => {
     expect(visible).toContain("Next →");
   });
 
+  it("doesn't show the outcome ID in the entry, but keeps it in links and for Copy link", () => {
+    const raw = render(source, { path: "/dictionary/V_01" });
+    for (const entry of [raw.slice(raw.indexOf('class="dictionary-panel')), raw.slice(raw.indexOf("<dialog"))]) {
+      const body = entry.slice(entry.indexOf("<h2"), entry.indexOf("Definition"));
+      expect(text(body)).not.toContain("V_01");
+      expect(body).toContain("Copy link");
+    }
+    expect(raw).toContain('id="result-V_01" href="/dictionary/V_01"');
+    expect(raw).toContain('href="/dictionary/V_02"'); // Next
+  });
+
   it("shows unattributable quotations exactly as written", () => {
     const visible = text(render(source, { path: "/dictionary/V_11" }));
     expect(visible).toContain('"PwD: “[SYNTHETIC] I didn\'t manage the simple chores”');
@@ -161,6 +172,33 @@ describe("public Outcome Dictionary page", () => {
     expect(raw).toMatch(/aria-expanded="true" aria-controls="group-group-s1"/);
   });
 
+  it("server-renders a deep-linked outcome inline for the split view too, as a region rather than a dialog", () => {
+    const raw = render(source, { path: "/dictionary/V_01" });
+    // CSS shows the inline panel from `lg` and the sheet below it until the page knows its width.
+    expect(raw).toMatch(/<div style="[^"]*--cat-band:[^"]*" class="dictionary-panel /);
+    expect(raw).toContain('<h2 id="entry-V_01-heading"');
+    expect(raw).toMatch(/aria-labelledby="entry-V_01-heading" role="region"/);
+    const panel = raw.slice(raw.indexOf('class="dictionary-panel'), raw.indexOf("<dialog"));
+    expect(panel).not.toContain("Close");
+    expect(panel).toContain("Copy link");
+    expect(panel).toContain("Next →");
+    expect(raw).not.toContain("Select an outcome");
+  });
+
+  it("shows a quiet placeholder beside the index when no outcome is selected, without selecting one", () => {
+    const raw = render(source);
+    expect(text(raw)).toContain("Select an outcome");
+    expect(text(raw)).toContain("80 outcome domains · 2 categories · 9 group domains");
+    expect(raw).not.toContain("dictionary-panel");
+    expect(raw).not.toContain('aria-current="true"');
+  });
+
+  it("puts the category's colour in the entry's band, with legible text", () => {
+    const raw = render(source, { path: "/dictionary/V_01" });
+    expect(raw).toMatch(/--cat-band:#[0-9A-F]{6};--cat-band-text:#FFFFFF/);
+    expect(raw).toContain("bg-[var(--cat-band)] text-[var(--cat-band-text)]");
+  });
+
   it("sorts A–Z within each group, and offers best match only while searching", () => {
     const alpha = text(render(source, { search: "sort=alpha" }));
     expect(alpha).toContain("Dictionary order");
@@ -213,6 +251,11 @@ describe("public Outcome Dictionary page", () => {
     expect(html).toContain('lang="fr"');
     expect(html).toContain('lang="en"');
     expect(visible).toContain("Showing the French translation where available");
+    // The menu: the published languages by their own names only, without counts or status.
+    expect(html).toMatch(/<option value="en" lang="en">English<\/option><option value="fr" lang="fr" selected="">Français<\/option><\/select>/);
+    expect(html).not.toContain("(French)");
+    const options = [...html.matchAll(/<option value="[a-z-]+" lang="[a-z-]+"[^>]*>([^<]*)<\/option>/gi)].map((m) => m[1]);
+    expect(options).toEqual(["English", "Français"]);
   });
 
   it("shows the 'being prepared' message when nothing is published", () => {

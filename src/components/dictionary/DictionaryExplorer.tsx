@@ -1,16 +1,16 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import type { ParticipantRole } from "@/content/dictionary/schema";
 import { assignCategoryTones } from "@/lib/dictionary/category-colors";
 import { buildSearchIndex, search } from "@/lib/dictionary/search";
 import type { DictionaryView, ViewOutcome } from "@/lib/dictionary/view";
 import CategoryNav from "./CategoryNav";
 import DictionaryHeader from "./DictionaryHeader";
-import { DICTIONARY_CONTAINER } from "./layout";
-import OutcomeDetail, { type NeighbourLink } from "./OutcomeDetail";
+import { EntryPlaceholder, OutcomePanel, OutcomeSheet, type NeighbourLink, type OutcomeEntryProps } from "./OutcomeDetail";
 import OutcomeIndex, { type IndexSection } from "./OutcomeIndex";
+import { useEntryLayout } from "./useEntryLayout";
 
 /** "auto": dictionary order. "alpha": A–Z within each group. "relevance": best match first (while searching). */
 export type SortChoice = "auto" | "alpha" | "relevance";
@@ -38,6 +38,10 @@ type DictionaryExplorerProps = {
   texts: ExplorerTexts;
   /** The About text, rendered on the server. */
   about: ReactNode;
+  /** Wide screens: the right-hand panel's text while no outcome is selected. */
+  placeholder: ReactNode;
+  /** Wide screens: space a fixed bar takes at the bottom of the viewport (the admin preview's notice). */
+  bottomInset?: string;
   /** "/dictionary" publicly; the preview route in the admin. */
   basePath: string;
   /** "path": outcomes at basePath/ID (public). "query": ?outcome=ID (preview). */
@@ -46,6 +50,13 @@ type DictionaryExplorerProps = {
   preserve?: Record<string, string>;
   initialFilters: ExplorerFilters;
 };
+
+/**
+ * The index's column: the page's centred container below `lg`; from `lg`
+ * the left-hand pane of the split view, scrolling on its own.
+ */
+const INDEX_PANE =
+  "mx-auto box-border w-full max-w-[77rem] px-4 pt-3 pb-10 sm:px-6 sm:pt-5 sm:pb-16 lg:mx-0 lg:min-h-0 lg:max-w-none lg:overflow-y-auto lg:border-r lg:border-dict-rule lg:px-5 lg:pt-4 lg:pb-6";
 
 /** Below Tailwind's `sm` breakpoint the cards become an accordion and the entry a bottom sheet. */
 const SMALL = "(max-width: 639px)";
@@ -59,13 +70,37 @@ function isModifiedClick(event: MouseEvent) {
 }
 
 /**
+ * Keeps a link in the index's own scroll area visible, below its sticky
+ * search controls, without scrolling the page itself (scrollIntoView would).
+ */
+function revealInPane(pane: HTMLElement, element: HTMLElement, sticky: HTMLElement | null) {
+  const area = pane.getBoundingClientRect();
+  const box = element.getBoundingClientRect();
+  const top = area.top + (sticky?.offsetHeight ?? 0) + 8;
+  const bottom = area.bottom - 8;
+  if (box.top < top) pane.scrollTop -= top - box.top;
+  else if (box.bottom > bottom) pane.scrollTop += Math.min(box.bottom - bottom, box.top - top);
+}
+
+/**
  * The dictionary: search, category tabs and an index of group cards, with
- * the selected outcome in a sheet over the index. The open outcome lives in
+ * the selected outcome beside the index on wide screens (a permanent split
+ * view) and in a sheet over it on narrower ones. The open outcome lives in
  * the URL (basePath/ID, or ?outcome=ID in the preview), so links are
  * permanent and Back/Forward open and close entries; search and filters are
  * mirrored into the query string.
  */
-export default function DictionaryExplorer({ view, texts, about, basePath, urlMode, preserve, initialFilters }: DictionaryExplorerProps) {
+export default function DictionaryExplorer({
+  view,
+  texts,
+  about,
+  placeholder,
+  bottomInset,
+  basePath,
+  urlMode,
+  preserve,
+  initialFilters,
+}: DictionaryExplorerProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -99,6 +134,22 @@ export default function DictionaryExplorer({ view, texts, about, basePath, urlMo
     update();
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
+  }, []);
+
+  const entryLayout = useEntryLayout();
+  const split = entryLayout === "split";
+
+  // Wide screens: the split view fills the viewport below the site's sticky
+  // header. CSS estimates the header's height from its design tokens; this
+  // replaces the estimate with the measured height.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = rootRef.current;
+    const header = document.querySelector<HTMLElement>("body header");
+    if (!root || !header) return;
+    const observer = new ResizeObserver(() => root.style.setProperty("--site-header-h", `${header.offsetHeight}px`));
+    observer.observe(header);
+    return () => observer.disconnect();
   }, []);
 
   // The selected outcome lives in the URL, so links are permanent and the
@@ -231,8 +282,24 @@ export default function DictionaryExplorer({ view, texts, about, basePath, urlMo
   // ---- Selection and focus ------------------------------------------------
 
   const searchRef = useRef<HTMLInputElement>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
   const openedFromList = useRef(false);
   const lastSelected = useRef<string | null>(null);
+
+  /** Brings an index link into view: within the index's own pane in the split view, in the page otherwise. */
+  function reveal(link: HTMLElement) {
+    if (split && paneRef.current) revealInPane(paneRef.current, link, controlsRef.current);
+    else link.scrollIntoView({ block: "nearest" });
+  }
+
+  // Split view: the index follows the shown outcome (a deep link, Previous /
+  // Next, Back and Forward), without moving focus.
+  useEffect(() => {
+    if (!split || !selectedId) return;
+    const link = document.getElementById(`result-${selectedId}`);
+    if (link && paneRef.current) revealInPane(paneRef.current, link, controlsRef.current);
+  }, [split, selectedId]);
 
   function select(event: MouseEvent<HTMLAnchorElement>, id: string) {
     if (isModifiedClick(event)) return; // let "open in new tab" work normally
@@ -269,8 +336,9 @@ export default function DictionaryExplorer({ view, texts, about, basePath, urlMo
     const link = document.getElementById(`result-${lastSelected.current}`);
     if (link) {
       link.focus({ preventScroll: true });
-      link.scrollIntoView({ block: "nearest" });
+      reveal(link);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the selection changes
   }, [selectedId]);
 
   // "/" focuses the search from anywhere on the page.
@@ -354,214 +422,244 @@ export default function DictionaryExplorer({ view, texts, about, basePath, urlMo
           id="dictionary-language"
           value={view.language}
           onChange={(event) => changeLanguage(event.target.value)}
-          className="min-h-11 max-w-[11rem] min-w-0 cursor-pointer border-0 bg-transparent text-sm font-medium text-ink sm:max-w-[16rem]"
+          className="min-h-11 max-w-[11rem] min-w-0 cursor-pointer border-0 bg-transparent text-sm font-medium text-ink sm:max-w-[16rem] lg:max-w-[11rem]"
         >
-          {view.languages.map((language) => {
-            const native = language.nativeName.charAt(0).toLocaleUpperCase(language.code) + language.nativeName.slice(1);
-            return (
-              <option key={language.code} value={language.code}>
-                {native === language.name ? native : `${native} (${language.name})`}
-                {language.code !== view.masterLanguage ? ` · ${language.translated}/${view.totals.outcomes} translated` : ""}
-              </option>
-            );
-          })}
+          {view.languages.map((language) => (
+            // Names only: the published languages, each in its own language ("English", "Français").
+            <option key={language.code} value={language.code} lang={language.code}>
+              {language.label}
+            </option>
+          ))}
         </select>
       </div>
     ) : null;
 
+  const translationNote = (className: string) =>
+    isTranslation && (
+      <p className={`border-l-2 border-accent bg-paper px-4 py-2.5 text-sm text-ink ${className}`}>
+        Showing the {view.languageName} translation where available. Anything not yet translated is shown in English and marked{" "}
+        <span className="border border-dashed border-ink-muted/50 px-1 text-xs font-semibold">EN</span>.
+      </p>
+    );
+
+  const entryProps: Omit<OutcomeEntryProps, "onNavigate"> | null = selected && {
+    outcome: selected,
+    category: categoryByKey.get(selected.categoryKey),
+    group: groupByKey.get(selected.groupKey),
+    tone: tones.get(selected.categoryKey),
+    language: view.language,
+    languageName: view.languageName,
+    masterLanguage: view.masterLanguage,
+    roles: texts.roles,
+    verbatimsHeading: texts.verbatimsHeading,
+    verbatimsNote: texts.verbatimsNote,
+    highlight,
+    previous: neighbour(sequence[position - 1]),
+    next: neighbour(sequence[position + 1]),
+    shareUrl: shareUrlFor(selected.id),
+  };
+
   return (
-    <div className={`${DICTIONARY_CONTAINER} pt-3 pb-10 sm:pt-5 sm:pb-16`}>
-      <DictionaryHeader title={texts.heading} aboutLabel={texts.aboutLabel} about={about} aside={languageSelect} />
+    // Below `lg`: one column, the index in the page's own scroll. From `lg`:
+    // two columns filling the viewport below the site header, each scrolling
+    // on its own (see globals.css, .dictionary-split).
+    <div
+      ref={rootRef}
+      style={bottomInset ? ({ "--dictionary-bottom-inset": bottomInset } as CSSProperties) : undefined}
+      className="dictionary-split lg:mx-auto lg:grid lg:w-full lg:max-w-[90rem] lg:grid-cols-[minmax(20rem,34%)_minmax(0,1fr)]"
+    >
+      {/* The index: search, categories and outcomes */}
+      <div
+        ref={paneRef}
+        className={INDEX_PANE}
+      >
+        <DictionaryHeader title={texts.heading} aboutLabel={texts.aboutLabel} about={about} aside={languageSelect} />
 
-      {/* Search */}
-      <div className="mt-1">
-        <label htmlFor="dictionary-search" className="sr-only">
-          Search the dictionary
-        </label>
-        <div className="flex h-12 items-center gap-3 rounded-lg border border-dict-field bg-paper px-3.5 transition-[border-color,box-shadow] hover:border-[#c9c3bf] has-[input:focus-visible]:border-ink has-[input:focus-visible]:shadow-[0_0_0_1px_var(--color-ink)]">
-          <svg aria-hidden="true" viewBox="0 0 24 24" className="size-[1.125rem] flex-none text-ink-muted" fill="none" stroke="currentColor" strokeWidth="1.75">
-            <circle cx="10.5" cy="10.5" r="7" />
-            <path d="m16 16 5 5" strokeLinecap="round" />
-          </svg>
-          <input
-            ref={searchRef}
-            id="dictionary-search"
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape" && query) {
-                event.preventDefault();
-                setQuery("");
-              }
-            }}
-            placeholder={small ? "Search the dictionary" : "Search outcomes, definitions, experiences and quotations"}
-            autoComplete="off"
-            spellCheck={false}
-            aria-describedby="dictionary-search-help dictionary-status"
-            className="h-10 min-w-0 flex-1 bg-transparent text-base text-ink placeholder:text-ink-muted focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
-          />
-          {query && (
-            <button
-              type="button"
-              onClick={() => {
-                setQuery("");
-                searchRef.current?.focus();
-              }}
-              className="-mr-2 inline-flex size-10 flex-none items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-dict-hover hover:text-ink"
-            >
-              <svg aria-hidden="true" viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                <path d="m5 5 10 10M15 5 5 15" />
-              </svg>
-              <span className="sr-only">Clear search</span>
-            </button>
-          )}
-        </div>
-        <p id="dictionary-search-help" className="sr-only">
-          Searches outcome names, definitions, experiences and quotations. Matches any part of a word, ignores accents and capitals, and
-          allows for small typos. All words must match. Press slash to search from anywhere on the page.
-        </p>
-      </div>
+        {translationNote("mb-2 hidden lg:block")}
 
-      {isTranslation && (
-        <p className="mt-3 border-l-2 border-accent bg-paper px-4 py-2.5 text-sm text-ink">
-          Showing the {view.languageName} translation where available. Anything not yet translated is shown in English and marked{" "}
-          <span className="border border-dashed border-ink-muted/50 px-1 text-xs font-semibold">EN</span>.
-        </p>
-      )}
-
-      {/* Category tabs */}
-      <div className="mt-1.5 sm:mt-2">
-        <CategoryNav
-          label="Category"
-          categories={categories}
-          tones={tones}
-          matching={matching}
-          filtered={searching || translatedOnly}
-          total={view.totals.outcomes}
-          categoryKey={categoryKey}
-          languageName={view.languageName}
-          onSelect={chooseCategory}
-        />
-      </div>
-
-      {/* Count and order */}
-      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-6 text-[0.8125rem] text-ink-muted">
-        <p id="dictionary-status" role="status" aria-live="polite">
-          {statusText}
-        </p>
-        <div className="flex flex-wrap items-center gap-x-5">
-          {isTranslation && (
-            <label className="flex min-h-11 items-center gap-2 sm:min-h-9">
-              <input
-                type="checkbox"
-                checked={translatedOnly}
-                onChange={(event) => setTranslatedOnly(event.target.checked)}
-                className="size-4 accent-[var(--teal-deep)]"
-              />
-              Translated only
+        {/* Search, categories, count and order: always at hand in the split view.
+            Sticky offsets count from the pane's padding edge, so -top-4 cancels its pt-4. */}
+        <div ref={controlsRef} className="lg:sticky lg:-top-4 lg:z-10 lg:-mx-5 lg:-mt-2 lg:bg-dict-canvas lg:px-5 lg:pt-2">
+          {/* Search */}
+          <div className="mt-1">
+            <label htmlFor="dictionary-search" className="sr-only">
+              Search the dictionary
             </label>
-          )}
-          {filtersActive && (
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="min-h-11 text-ink underline decoration-1 underline-offset-[3px] transition-colors hover:text-accent sm:min-h-9"
-            >
-              Clear all
-            </button>
-          )}
-          <label className="flex items-center gap-2">
-            Sort
-            <select
-              value={effectiveSort}
-              onChange={(event) => setSort(event.target.value as SortChoice)}
-              className="min-h-11 cursor-pointer border-0 bg-transparent font-medium text-ink sm:min-h-9"
-            >
-              {sortOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </div>
-
-      {focusedGroup && (
-        <button
-          type="button"
-          onClick={() => setGroupKey(null)}
-          className="mt-2 min-h-11 text-sm font-semibold text-ink transition-colors hover:text-accent"
-        >
-          <span aria-hidden="true">← </span>All groups
-        </button>
-      )}
-
-      {/* The index */}
-      <div className="mt-1">
-        {filtered.length === 0 ? (
-          <div className="py-14 text-center">
-            <p className="font-semibold text-ink">
-              {searching ? <>No outcomes match &ldquo;{query.trim()}&rdquo;</> : "No outcomes match these filters"}
-            </p>
-            <p className="mx-auto mt-2 max-w-sm text-sm text-ink-muted">
-              {categoryKey && searching
-                ? "Try searching all categories, or check the spelling."
-                : searching
-                  ? "Search looks for any part of a word, ignores accents and capitals and allows small typos. Try fewer words, or a related word."
-                  : "Try another category or group domain."}
-            </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-x-6">
-              {categoryKey && searching && (
-                <button type="button" className="min-h-11 text-sm font-medium text-ink underline underline-offset-[3px]" onClick={() => chooseCategory(null)}>
-                  Search all categories
+            <div className="flex h-12 items-center gap-3 rounded-lg border border-dict-field bg-paper px-3.5 transition-[border-color,box-shadow] hover:border-[#c9c3bf] has-[input:focus-visible]:border-ink has-[input:focus-visible]:shadow-[0_0_0_1px_var(--color-ink)]">
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="size-[1.125rem] flex-none text-ink-muted" fill="none" stroke="currentColor" strokeWidth="1.75">
+                <circle cx="10.5" cy="10.5" r="7" />
+                <path d="m16 16 5 5" strokeLinecap="round" />
+              </svg>
+              <input
+                ref={searchRef}
+                id="dictionary-search"
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && query) {
+                    event.preventDefault();
+                    setQuery("");
+                  }
+                }}
+                placeholder={small || split ? "Search the dictionary" : "Search outcomes, definitions, experiences and quotations"}
+                autoComplete="off"
+                spellCheck={false}
+                aria-describedby="dictionary-search-help dictionary-status"
+                className="h-10 min-w-0 flex-1 bg-transparent text-base text-ink placeholder:text-ink-muted focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery("");
+                    searchRef.current?.focus();
+                  }}
+                  className="-mr-2 inline-flex size-10 flex-none items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-dict-hover hover:text-ink"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                    <path d="m5 5 10 10M15 5 5 15" />
+                  </svg>
+                  <span className="sr-only">Clear search</span>
                 </button>
               )}
-              <button type="button" className="min-h-11 text-sm font-medium text-ink underline underline-offset-[3px]" onClick={resetFilters}>
-                Clear search and filters
-              </button>
+            </div>
+            <p id="dictionary-search-help" className="sr-only">
+              Searches outcome names, definitions, experiences and quotations. Matches any part of a word, ignores accents and capitals, and
+              allows for small typos. All words must match. Press slash to search from anywhere on the page.
+            </p>
+          </div>
+
+          {translationNote("mt-3 lg:hidden")}
+
+          {/* Category tabs */}
+          <div className="mt-1.5 sm:mt-2">
+            <CategoryNav
+              label="Category"
+              categories={categories}
+              tones={tones}
+              matching={matching}
+              filtered={searching || translatedOnly}
+              total={view.totals.outcomes}
+              categoryKey={categoryKey}
+              languageName={view.languageName}
+              onSelect={chooseCategory}
+            />
+          </div>
+
+          {/* Count and order */}
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-x-6 text-[0.8125rem] text-ink-muted">
+            <p id="dictionary-status" role="status" aria-live="polite">
+              {statusText}
+            </p>
+            <div className="flex flex-wrap items-center gap-x-5">
+              {isTranslation && (
+                <label className="flex min-h-11 items-center gap-2 sm:min-h-9">
+                  <input
+                    type="checkbox"
+                    checked={translatedOnly}
+                    onChange={(event) => setTranslatedOnly(event.target.checked)}
+                    className="size-4 accent-[var(--teal-deep)]"
+                  />
+                  Translated only
+                </label>
+              )}
+              {filtersActive && (
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="min-h-11 text-ink underline decoration-1 underline-offset-[3px] transition-colors hover:text-accent sm:min-h-9"
+                >
+                  Clear all
+                </button>
+              )}
+              <label className="flex items-center gap-2">
+                Sort
+                <select
+                  value={effectiveSort}
+                  onChange={(event) => setSort(event.target.value as SortChoice)}
+                  className="min-h-11 cursor-pointer border-0 bg-transparent font-medium text-ink sm:min-h-9"
+                >
+                  {sortOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           </div>
-        ) : (
-          <OutcomeIndex
-            layout={layout}
-            categoryByKey={categoryByKey}
-            groupByKey={groupByKey}
-            tones={tones}
-            search={result}
-            selectedId={selectedId}
-            languageName={view.languageName}
-            focusedGroup={groupKey}
-            openGroups={openGroups}
-            hrefFor={(id) => hrefFor(id)}
-            onSelect={select}
-            onFocusGroup={setGroupKey}
-            onToggleGroup={toggleGroup}
-          />
+
+        </div>
+
+        {focusedGroup && (
+          <button
+            type="button"
+            onClick={() => setGroupKey(null)}
+            className="mt-2 min-h-11 text-sm font-semibold text-ink transition-colors hover:text-accent"
+          >
+            <span aria-hidden="true">← </span>All groups
+          </button>
         )}
+
+        {/* The index */}
+        <div className="mt-1">
+          {filtered.length === 0 ? (
+            <div className="py-14 text-center">
+              <p className="font-semibold text-ink">
+                {searching ? <>No outcomes match &ldquo;{query.trim()}&rdquo;</> : "No outcomes match these filters"}
+              </p>
+              <p className="mx-auto mt-2 max-w-sm text-sm text-ink-muted">
+                {categoryKey && searching
+                  ? "Try searching all categories, or check the spelling."
+                  : searching
+                    ? "Search looks for any part of a word, ignores accents and capitals and allows small typos. Try fewer words, or a related word."
+                    : "Try another category or group domain."}
+              </p>
+              <div className="mt-4 flex flex-wrap justify-center gap-x-6">
+                {categoryKey && searching && (
+                  <button type="button" className="min-h-11 text-sm font-medium text-ink underline underline-offset-[3px]" onClick={() => chooseCategory(null)}>
+                    Search all categories
+                  </button>
+                )}
+                <button type="button" className="min-h-11 text-sm font-medium text-ink underline underline-offset-[3px]" onClick={resetFilters}>
+                  Clear search and filters
+                </button>
+              </div>
+            </div>
+          ) : (
+            <OutcomeIndex
+              layout={layout}
+              categoryByKey={categoryByKey}
+              groupByKey={groupByKey}
+              tones={tones}
+              search={result}
+              selectedId={selectedId}
+              languageName={view.languageName}
+              focusedGroup={groupKey}
+              openGroups={openGroups}
+              hrefFor={(id) => hrefFor(id)}
+              onSelect={select}
+              onFocusGroup={setGroupKey}
+              onToggleGroup={toggleGroup}
+            />
+          )}
+        </div>
+
       </div>
 
-      {selected && (
-        <OutcomeDetail
-          outcome={selected}
-          category={categoryByKey.get(selected.categoryKey)}
-          group={groupByKey.get(selected.groupKey)}
-          tone={tones.get(selected.categoryKey)}
-          language={view.language}
-          languageName={view.languageName}
-          masterLanguage={view.masterLanguage}
-          roles={texts.roles}
-          verbatimsHeading={texts.verbatimsHeading}
-          verbatimsNote={texts.verbatimsNote}
-          highlight={highlight}
-          previous={neighbour(sequence[position - 1])}
-          next={neighbour(sequence[position + 1])}
-          shareUrl={shareUrlFor(selected.id)}
-          onNavigate={select}
-          onClose={closeEntry}
-        />
-      )}
+      {/* Wide screens: the shown outcome, inline beside the index */}
+      <div className="hidden min-h-0 min-w-0 flex-col p-[clamp(0.625rem,2vw,1.25rem)_clamp(0.625rem,2vw,1.5rem)] lg:flex">
+        {entryLayout !== "sheet" &&
+          (entryProps ? (
+            <OutcomePanel {...entryProps} onNavigate={select} />
+          ) : (
+            <EntryPlaceholder>{placeholder}</EntryPlaceholder>
+          ))}
+      </div>
+
+      {/* Tablets and phones: the shown outcome in a modal sheet */}
+      {entryProps && !split && <OutcomeSheet {...entryProps} onNavigate={select} modal={entryLayout === "sheet"} onClose={closeEntry} />}
     </div>
   );
 }
