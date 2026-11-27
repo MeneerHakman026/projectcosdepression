@@ -35,7 +35,7 @@ export type Taxonomy = {
 };
 
 /** Separator that can't occur in a label, so "A"+"B C" never collides with "A B"+"C". */
-const KEY_SEPARATOR = "␟";
+export const KEY_SEPARATOR = "␟";
 
 export function categoryKeyOf(category: string): string {
   return labelKey(category);

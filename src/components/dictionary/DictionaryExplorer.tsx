@@ -1,16 +1,19 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import type { ParticipantRole } from "@/content/dictionary/schema";
-import { FIELD_LABELS, type TextField } from "@/lib/dictionary/model";
-import { buildSearchIndex, highlightRanges, search, snippet } from "@/lib/dictionary/search";
+import { assignCategoryTones } from "@/lib/dictionary/category-colors";
+import { buildSearchIndex, search } from "@/lib/dictionary/search";
 import type { DictionaryView, ViewOutcome } from "@/lib/dictionary/view";
-import CategoryExplorer from "./CategoryExplorer";
-import Highlighted from "./Highlighted";
+import CategoryNav from "./CategoryNav";
+import DictionaryHeader from "./DictionaryHeader";
+import { DICTIONARY_CONTAINER } from "./layout";
 import OutcomeDetail, { type NeighbourLink } from "./OutcomeDetail";
+import OutcomeIndex, { type IndexSection } from "./OutcomeIndex";
 
-export type SortChoice = "auto" | "source" | "alpha";
+/** "auto": dictionary order. "alpha": A–Z within each group. "relevance": best match first (while searching). */
+export type SortChoice = "auto" | "alpha" | "relevance";
 
 export type ExplorerFilters = {
   q: string;
@@ -21,7 +24,10 @@ export type ExplorerFilters = {
 };
 
 export type ExplorerTexts = {
-  explorerHeading: string;
+  /** The page's H1 (CMS: intro heading). */
+  heading: string;
+  /** CMS: the About section heading, used as the disclosure's label. */
+  aboutLabel: string;
   verbatimsHeading: string;
   verbatimsNote: string;
   roles: ParticipantRole[];
@@ -30,6 +36,8 @@ export type ExplorerTexts = {
 type DictionaryExplorerProps = {
   view: DictionaryView;
   texts: ExplorerTexts;
+  /** The About text, rendered on the server. */
+  about: ReactNode;
   /** "/dictionary" publicly; the preview route in the admin. */
   basePath: string;
   /** "path": outcomes at basePath/ID (public). "query": ?outcome=ID (preview). */
@@ -39,7 +47,8 @@ type DictionaryExplorerProps = {
   initialFilters: ExplorerFilters;
 };
 
-const RESULT_FIELDS: TextField[] = ["definition", "experience", "verbatims"];
+/** Below Tailwind's `sm` breakpoint the cards become an accordion and the entry a bottom sheet. */
+const SMALL = "(max-width: 639px)";
 
 function plural(n: number, singular: string, pluralForm = `${singular}s`) {
   return `${n} ${n === 1 ? singular : pluralForm}`;
@@ -49,13 +58,21 @@ function isModifiedClick(event: MouseEvent) {
   return event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
 }
 
-export default function DictionaryExplorer({ view, texts, basePath, urlMode, preserve, initialFilters }: DictionaryExplorerProps) {
+/**
+ * The dictionary: search, category tabs and an index of group cards, with
+ * the selected outcome in a sheet over the index. The open outcome lives in
+ * the URL (basePath/ID, or ?outcome=ID in the preview), so links are
+ * permanent and Back/Forward open and close entries; search and filters are
+ * mirrored into the query string.
+ */
+export default function DictionaryExplorer({ view, texts, about, basePath, urlMode, preserve, initialFilters }: DictionaryExplorerProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { outcomes, categories } = view;
   const isTranslation = view.language !== view.masterLanguage;
 
+  const tones = useMemo(() => assignCategoryTones(categories.map((c) => c.key)), [categories]);
   const categoryBySlug = useMemo(() => new Map(categories.map((c) => [c.slug, c])), [categories]);
   const groupBySlug = useMemo(
     () => new Map(categories.flatMap((c) => c.groups.map((g) => [g.slug, { ...g, categoryKey: c.key }] as const))),
@@ -68,12 +85,21 @@ export default function DictionaryExplorer({ view, texts, basePath, urlMode, pre
   const initialGroup = initialFilters.group ? groupBySlug.get(initialFilters.group) : undefined;
   const [query, setQuery] = useState(initialFilters.q);
   const [categoryKey, setCategoryKey] = useState<string | null>(
-    initialGroup?.categoryKey ?? (initialFilters.category ? categoryBySlug.get(initialFilters.category)?.key ?? null : null)
+    initialFilters.category ? categoryBySlug.get(initialFilters.category)?.key ?? null : null
   );
   const [groupKey, setGroupKey] = useState<string | null>(initialGroup?.key ?? null);
   const [sort, setSort] = useState<SortChoice>(initialFilters.sort);
   const [translatedOnly, setTranslatedOnly] = useState(isTranslation && initialFilters.translatedOnly);
   const deferredQuery = useDeferredValue(query);
+  const [small, setSmall] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia(SMALL);
+    const update = () => setSmall(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   // The selected outcome lives in the URL, so links are permanent and the
   // browser's back button moves between the list and an outcome.
@@ -85,13 +111,22 @@ export default function DictionaryExplorer({ view, texts, basePath, urlMode, pre
   }, [urlMode, searchParams, pathname, basePath, outcomeById]);
   const selected = selectedId ? outcomeById.get(selectedId)! : null;
 
+  // Small screens: which group cards are expanded. The open outcome's group
+  // is, so that closing the entry returns to a visible link.
+  const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(() => new Set(selected ? [selected.groupKey] : []));
+  const [trackedSelection, setTrackedSelection] = useState(selectedId);
+  if (trackedSelection !== selectedId) {
+    setTrackedSelection(selectedId);
+    if (selected && !openGroups.has(selected.groupKey)) setOpenGroups(new Set(openGroups).add(selected.groupKey));
+  }
+
   const index = useMemo(() => buildSearchIndex(outcomes), [outcomes]);
   const result = useMemo(() => search(index, deferredQuery), [index, deferredQuery]);
   const highlight = result?.highlight ?? null;
   const searching = result !== null;
 
-  // Counts for the category explorer: matches for the search (and
-  // translated-only toggle), ignoring the category/group filter itself.
+  // Counts for the category tabs: matches for the search (and translated-only
+  // toggle), ignoring the category/group filter itself.
   const matching = useMemo(() => {
     const counts = new Map<string, number>();
     for (const outcome of outcomes) {
@@ -103,22 +138,51 @@ export default function DictionaryExplorer({ view, texts, basePath, urlMode, pre
     return counts;
   }, [outcomes, result, translatedOnly]);
 
-  const effectiveSort = sort === "auto" ? (searching ? "relevance" : "source") : sort;
+  const effectiveSort: SortChoice = sort === "relevance" && !searching ? "auto" : sort;
   const collator = useMemo(() => new Intl.Collator(view.language, { sensitivity: "base", numeric: true }), [view.language]);
-  const results = useMemo(() => {
-    const filtered = outcomes.filter(
-      (o) =>
-        (!categoryKey || o.categoryKey === categoryKey) &&
-        (!groupKey || o.groupKey === groupKey) &&
-        (!translatedOnly || o.translated) &&
-        (!result || result.hits.has(o.id))
-    );
-    if (effectiveSort === "alpha") return [...filtered].sort((a, b) => collator.compare(a.outcomeDomain.text, b.outcomeDomain.text));
+
+  const filtered = useMemo(
+    () =>
+      outcomes.filter(
+        (o) =>
+          (!categoryKey || o.categoryKey === categoryKey) &&
+          (!groupKey || o.groupKey === groupKey) &&
+          (!translatedOnly || o.translated) &&
+          (!result || result.hits.has(o.id))
+      ),
+    [outcomes, categoryKey, groupKey, translatedOnly, result]
+  );
+
+  // The index's layout, and the same order flattened (for Previous / Next).
+  const { layout, ordered } = useMemo(() => {
     if (effectiveSort === "relevance" && result) {
-      return [...filtered].sort((a, b) => result.hits.get(b.id)!.score - result.hits.get(a.id)!.score || a.position - b.position);
+      const ranked = [...filtered].sort((a, b) => result.hits.get(b.id)!.score - result.hits.get(a.id)!.score || a.position - b.position);
+      return { layout: { kind: "ranked" as const, outcomes: ranked }, ordered: ranked };
     }
-    return filtered;
-  }, [outcomes, categoryKey, groupKey, translatedOnly, result, effectiveSort, collator]);
+    const byGroup = new Map<string, ViewOutcome[]>();
+    for (const outcome of filtered) {
+      const list = byGroup.get(outcome.groupKey);
+      if (list) list.push(outcome);
+      else byGroup.set(outcome.groupKey, [outcome]);
+    }
+    const sections: IndexSection[] = [];
+    for (const category of categories) {
+      const groups = category.groups
+        .filter((group) => byGroup.has(group.key))
+        .map((group) => {
+          const list = byGroup.get(group.key)!;
+          return {
+            group,
+            outcomes: effectiveSort === "alpha" ? [...list].sort((a, b) => collator.compare(a.outcomeDomain.text, b.outcomeDomain.text)) : list,
+          };
+        });
+      if (groups.length > 0) sections.push({ category, groups });
+    }
+    return {
+      layout: { kind: "sections" as const, sections },
+      ordered: sections.flatMap((s) => s.groups.flatMap((g) => g.outcomes)),
+    };
+  }, [filtered, effectiveSort, result, categories, collator]);
 
   const filtersActive = query.trim() !== "" || categoryKey !== null || groupKey !== null || translatedOnly;
 
@@ -128,8 +192,8 @@ export default function DictionaryExplorer({ view, texts, basePath, urlMode, pre
     const params = new URLSearchParams(preserve);
     if (isTranslation) params.set("lang", view.language);
     if (query.trim()) params.set("q", query.trim());
+    if (categoryKey) params.set("category", categoryByKey.get(categoryKey)!.slug);
     if (groupKey) params.set("group", groupByKey.get(groupKey)!.slug);
-    else if (categoryKey) params.set("category", categoryByKey.get(categoryKey)!.slug);
     if (sort !== "auto") params.set("sort", sort);
     if (translatedOnly) params.set("translated", "1");
     return params;
@@ -164,12 +228,9 @@ export default function DictionaryExplorer({ view, texts, basePath, urlMode, pre
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hrefFor only depends on these
   }, [filterParams, selectedId]);
 
-  // ---- Selection, focus and scrolling -------------------------------------
+  // ---- Selection and focus ------------------------------------------------
 
-  const headingRef = useRef<HTMLHeadingElement>(null);
-  const detailPaneRef = useRef<HTMLDivElement>(null);
-  const workspaceRef = useRef<HTMLDivElement>(null);
-  const focusAfterSelect = useRef(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const openedFromList = useRef(false);
   const lastSelected = useRef<string | null>(null);
 
@@ -177,43 +238,67 @@ export default function DictionaryExplorer({ view, texts, basePath, urlMode, pre
     if (isModifiedClick(event)) return; // let "open in new tab" work normally
     event.preventDefault();
     if (id === selectedId) return;
-    openedFromList.current = selectedId === null;
-    focusAfterSelect.current = true;
-    window.history.pushState(null, "", hrefFor(id));
+    if (selectedId === null) {
+      openedFromList.current = true;
+      window.history.pushState(null, "", hrefFor(id));
+    } else {
+      // Previous / Next inside the open entry replace it, so Back (and
+      // closing) always return to the index.
+      window.history.replaceState(null, "", hrefFor(id));
+    }
   }
 
-  function backToResults(event: MouseEvent<HTMLAnchorElement>) {
-    if (isModifiedClick(event)) return;
-    event.preventDefault();
-    if (openedFromList.current) window.history.back();
-    else window.history.pushState(null, "", hrefFor(null));
+  /** Closes the entry: back to where the visitor came from, or to the index. */
+  function closeEntry() {
+    if (openedFromList.current) {
+      openedFromList.current = false;
+      window.history.back();
+    } else {
+      window.history.pushState(null, "", hrefFor(null));
+    }
   }
 
   useEffect(() => {
     if (selectedId) {
       lastSelected.current = selectedId;
-      if (!focusAfterSelect.current) return;
-      focusAfterSelect.current = false;
-      const narrow = window.matchMedia("(max-width: 1023px)").matches;
-      if (narrow) {
-        workspaceRef.current?.scrollIntoView({ block: "start" });
-        headingRef.current?.focus({ preventScroll: true });
-      } else {
-        detailPaneRef.current?.scrollTo({ top: 0 });
-      }
-    } else if (lastSelected.current) {
-      // Returning to the list: put focus back on the outcome that was open.
-      const link = document.getElementById(`result-${lastSelected.current}`);
-      if (link && window.matchMedia("(max-width: 1023px)").matches) {
-        link.focus({ preventScroll: true });
-        link.scrollIntoView({ block: "center" });
-      }
+      return;
+    }
+    openedFromList.current = false;
+    if (!lastSelected.current) return;
+    // Back on the index: put focus on the outcome that was open.
+    const link = document.getElementById(`result-${lastSelected.current}`);
+    if (link) {
+      link.focus({ preventScroll: true });
+      link.scrollIntoView({ block: "nearest" });
     }
   }, [selectedId]);
 
-  function chooseCategory(nextCategory: string | null, nextGroup: string | null) {
+  // "/" focuses the search from anywhere on the page.
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      if (document.querySelector("dialog.dictionary-entry[open]")) return;
+      event.preventDefault();
+      searchRef.current?.focus();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  function chooseCategory(nextCategory: string | null) {
     setCategoryKey(nextCategory);
-    setGroupKey(nextGroup);
+    setGroupKey(null);
+  }
+
+  function toggleGroup(key: string) {
+    const next = new Set(openGroups);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setOpenGroups(next);
+    // On a small screen, collapsing the group a link opened on its own returns to all groups.
+    if (groupKey === key) setGroupKey(null);
   }
 
   function resetFilters() {
@@ -234,332 +319,249 @@ export default function DictionaryExplorer({ view, texts, basePath, urlMode, pre
 
   // ---- Navigation between outcomes ----------------------------------------
 
-  const sequence = selected && results.some((o) => o.id === selected.id) ? results : outcomes;
+  const sequence = selected && ordered.some((o) => o.id === selected.id) ? ordered : outcomes;
   const position = selected ? sequence.findIndex((o) => o.id === selected.id) : -1;
   const neighbour = (outcome: ViewOutcome | undefined): NeighbourLink =>
     outcome ? { id: outcome.id, title: outcome.outcomeDomain.text, href: hrefFor(outcome.id) } : null;
 
   // ---- Rendering ------------------------------------------------------------
 
-  const groupOptions = categoryKey ? categoryByKey.get(categoryKey)?.groups ?? [] : [];
   const statusText = searching
-    ? `${plural(results.length, "outcome")} found`
+    ? `${plural(filtered.length, "outcome")} found`
     : filtersActive
-      ? `${plural(results.length, "outcome")} shown`
-      : `${plural(results.length, "outcome")}`;
+      ? `${plural(filtered.length, "outcome")} shown`
+      : plural(filtered.length, "outcome");
 
-  const showGroupHeadings = effectiveSort === "source";
+  const sortOptions: { value: SortChoice; label: string }[] = [
+    { value: "auto", label: "Dictionary order" },
+    ...(searching ? [{ value: "relevance" as const, label: "Best match" }] : []),
+    { value: "alpha", label: "A–Z" },
+  ];
+
+  const focusedGroup = groupKey ? groupByKey.get(groupKey) : undefined;
+
+  const languageSelect =
+    view.languages.length > 1 ? (
+      <div className="flex min-w-0 items-center gap-2">
+        <label htmlFor="dictionary-language" className="sr-only">
+          Language
+        </label>
+        <svg aria-hidden="true" viewBox="0 0 20 20" className="size-4 flex-none text-ink-muted" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <circle cx="10" cy="10" r="7.25" />
+          <path d="M2.75 10h14.5M10 2.75c2 2.2 2.9 4.6 2.9 7.25S12 15.05 10 17.25C8 15.05 7.1 12.65 7.1 10S8 4.95 10 2.75Z" />
+        </svg>
+        <select
+          id="dictionary-language"
+          value={view.language}
+          onChange={(event) => changeLanguage(event.target.value)}
+          className="min-h-11 max-w-[11rem] min-w-0 cursor-pointer border-0 bg-transparent text-sm font-medium text-ink sm:max-w-[16rem]"
+        >
+          {view.languages.map((language) => {
+            const native = language.nativeName.charAt(0).toLocaleUpperCase(language.code) + language.nativeName.slice(1);
+            return (
+              <option key={language.code} value={language.code}>
+                {native === language.name ? native : `${native} (${language.name})`}
+                {language.code !== view.masterLanguage ? ` · ${language.translated}/${view.totals.outcomes} translated` : ""}
+              </option>
+            );
+          })}
+        </select>
+      </div>
+    ) : null;
 
   return (
-    <div>
-      {/* Search and language */}
-      <div className="mx-auto max-w-wide px-gutter">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-          <div>
-            <label htmlFor="dictionary-search" className="block text-sm font-semibold text-ink">
-              Search the dictionary
-            </label>
-            <div className="relative mt-2">
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 20 20"
-                className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-ink-muted"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              >
-                <circle cx="8.5" cy="8.5" r="5.75" />
-                <path d="m13 13 4.5 4.5" strokeLinecap="round" />
+    <div className={`${DICTIONARY_CONTAINER} pt-3 pb-10 sm:pt-5 sm:pb-16`}>
+      <DictionaryHeader title={texts.heading} aboutLabel={texts.aboutLabel} about={about} aside={languageSelect} />
+
+      {/* Search */}
+      <div className="mt-1">
+        <label htmlFor="dictionary-search" className="sr-only">
+          Search the dictionary
+        </label>
+        <div className="flex h-12 items-center gap-3 rounded-lg border border-dict-field bg-paper px-3.5 transition-[border-color,box-shadow] hover:border-[#c9c3bf] has-[input:focus-visible]:border-ink has-[input:focus-visible]:shadow-[0_0_0_1px_var(--color-ink)]">
+          <svg aria-hidden="true" viewBox="0 0 24 24" className="size-[1.125rem] flex-none text-ink-muted" fill="none" stroke="currentColor" strokeWidth="1.75">
+            <circle cx="10.5" cy="10.5" r="7" />
+            <path d="m16 16 5 5" strokeLinecap="round" />
+          </svg>
+          <input
+            ref={searchRef}
+            id="dictionary-search"
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && query) {
+                event.preventDefault();
+                setQuery("");
+              }
+            }}
+            placeholder={small ? "Search the dictionary" : "Search outcomes, definitions, experiences and quotations"}
+            autoComplete="off"
+            spellCheck={false}
+            aria-describedby="dictionary-search-help dictionary-status"
+            className="h-10 min-w-0 flex-1 bg-transparent text-base text-ink placeholder:text-ink-muted focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("");
+                searchRef.current?.focus();
+              }}
+              className="-mr-2 inline-flex size-10 flex-none items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-dict-hover hover:text-ink"
+            >
+              <svg aria-hidden="true" viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="m5 5 10 10M15 5 5 15" />
               </svg>
-              <input
-                id="dictionary-search"
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search outcomes, definitions, experiences and quotations"
-                autoComplete="off"
-                spellCheck={false}
-                aria-describedby="dictionary-search-help dictionary-status"
-                className="w-full border border-ink/70 bg-paper py-3.5 pl-12 pr-4 text-body text-ink placeholder:text-ink-muted/80 focus:border-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              />
-            </div>
-            <p id="dictionary-search-help" className="mt-2 text-xs text-ink-muted">
-              Matches any part of a word, ignores accents and capitals, and allows for small typos. All words must match.
-            </p>
-          </div>
-          {view.languages.length > 1 && (
-            <div>
-              <label htmlFor="dictionary-language" className="block text-sm font-semibold text-ink">
-                Language
-              </label>
-              <select
-                id="dictionary-language"
-                value={view.language}
-                onChange={(event) => changeLanguage(event.target.value)}
-                className="mt-2 w-full border border-ink/70 bg-paper px-3 py-3.5 text-body text-ink lg:w-80"
-              >
-                {view.languages.map((language) => {
-                  const native = language.nativeName.charAt(0).toLocaleUpperCase(language.code) + language.nativeName.slice(1);
-                  return (
-                    <option key={language.code} value={language.code}>
-                      {native === language.name ? native : `${native} (${language.name})`}
-                      {language.code !== view.masterLanguage ? ` · ${language.translated}/${view.totals.outcomes} translated` : ""}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
+              <span className="sr-only">Clear search</span>
+            </button>
           )}
         </div>
-        {isTranslation && (
-          <p className="mt-4 border-l-4 border-accent bg-paper-alt px-4 py-3 text-sm text-ink">
-            Showing the {view.languageName} translation where available. Anything not yet translated is shown in English
-            and marked <span className="border border-dashed border-ink-muted/50 px-1 text-xs font-semibold">EN</span>.
-          </p>
-        )}
+        <p id="dictionary-search-help" className="sr-only">
+          Searches outcome names, definitions, experiences and quotations. Matches any part of a word, ignores accents and capitals, and
+          allows for small typos. All words must match. Press slash to search from anywhere on the page.
+        </p>
       </div>
 
-      {/* Category explorer */}
-      <div className="mx-auto mt-10 max-w-wide px-gutter">
-        <CategoryExplorer
-          heading={texts.explorerHeading}
+      {isTranslation && (
+        <p className="mt-3 border-l-2 border-accent bg-paper px-4 py-2.5 text-sm text-ink">
+          Showing the {view.languageName} translation where available. Anything not yet translated is shown in English and marked{" "}
+          <span className="border border-dashed border-ink-muted/50 px-1 text-xs font-semibold">EN</span>.
+        </p>
+      )}
+
+      {/* Category tabs */}
+      <div className="mt-1.5 sm:mt-2">
+        <CategoryNav
+          label="Category"
           categories={categories}
+          tones={tones}
           matching={matching}
-          searching={searching || translatedOnly}
+          filtered={searching || translatedOnly}
+          total={view.totals.outcomes}
           categoryKey={categoryKey}
-          groupKey={groupKey}
           languageName={view.languageName}
           onSelect={chooseCategory}
         />
       </div>
 
-      {/* Results and details */}
-      <div ref={workspaceRef} className="mx-auto mt-10 max-w-wide scroll-mt-24 border-t border-border px-gutter pt-8">
-        <div className="grid gap-x-10 lg:grid-cols-[minmax(19rem,25rem)_minmax(0,1fr)] xl:gap-x-14">
-          {/* Results */}
-          <div className={selected ? "hidden lg:block" : ""}>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="dictionary-category" className="block text-xs font-semibold text-ink-muted">
-                  Category
-                </label>
-                <select
-                  id="dictionary-category"
-                  value={categoryKey ?? ""}
-                  onChange={(event) => chooseCategory(event.target.value || null, null)}
-                  className="mt-1 w-full border border-border bg-paper px-2 py-2 text-sm text-ink"
-                >
-                  <option value="">All categories</option>
-                  {categories.map((category) => (
-                    <option key={category.key} value={category.key}>
-                      {category.label.text}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="dictionary-group" className="block text-xs font-semibold text-ink-muted">
-                  Group domain
-                </label>
-                <select
-                  id="dictionary-group"
-                  value={groupKey ?? ""}
-                  onChange={(event) => {
-                    const key = event.target.value || null;
-                    const owner = key ? categories.find((c) => c.groups.some((g) => g.key === key)) : null;
-                    chooseCategory(owner?.key ?? categoryKey, key);
-                  }}
-                  className="mt-1 w-full border border-border bg-paper px-2 py-2 text-sm text-ink"
-                >
-                  <option value="">All group domains</option>
-                  {categoryKey
-                    ? groupOptions.map((group) => (
-                        <option key={group.key} value={group.key}>
-                          {group.label.text}
-                        </option>
-                      ))
-                    : categories.map((category) => (
-                        <optgroup key={category.key} label={category.label.text}>
-                          {category.groups.map((group) => (
-                            <option key={group.key} value={group.key}>
-                              {group.label.text}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
-              <p id="dictionary-status" role="status" aria-live="polite" className="text-sm font-medium text-ink">
-                {statusText}
-                {!searching && !filtersActive && <span className="font-normal text-ink-muted"> in {plural(view.totals.categories, "category", "categories")}</span>}
-              </p>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                <label className="flex items-center gap-1.5 text-xs text-ink-muted">
-                  Sort
-                  <select
-                    id="dictionary-sort"
-                    value={sort}
-                    onChange={(event) => setSort(event.target.value as SortChoice)}
-                    className="border border-border bg-paper px-1.5 py-1 text-xs text-ink"
-                  >
-                    <option value="auto">{searching ? "Best match" : "Dictionary order"}</option>
-                    <option value="source">Dictionary order</option>
-                    <option value="alpha">A–Z</option>
-                  </select>
-                </label>
-                {isTranslation && (
-                  <label className="flex items-center gap-2 text-xs text-ink-muted">
-                    <input
-                      type="checkbox"
-                      checked={translatedOnly}
-                      onChange={(event) => setTranslatedOnly(event.target.checked)}
-                      className="accent-[var(--teal-deep)]"
-                    />
-                    Translated only
-                  </label>
-                )}
-                {filtersActive && (
-                  <button type="button" onClick={resetFilters} className="text-xs font-semibold text-accent underline underline-offset-2 hover:text-ink">
-                    Reset filters
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {results.length === 0 ? (
-              <div className="py-10 text-center">
-                <p className="text-body font-semibold text-ink">
-                  {searching ? <>No outcomes match &ldquo;{query.trim()}&rdquo;</> : "No outcomes match these filters"}
-                </p>
-                <p className="mx-auto mt-2 max-w-xs text-sm text-ink-muted">
-                  {categoryKey && searching
-                    ? "Try searching all categories, or check the spelling."
-                    : searching
-                      ? "Check the spelling, try fewer words, or try a related word."
-                      : "Try another category or group domain."}
-                </p>
-                <div className="mt-4 flex justify-center gap-2">
-                  {categoryKey && searching && (
-                    <button type="button" className="btn btn-compact" onClick={() => chooseCategory(null, null)}>
-                      Search all categories
-                    </button>
-                  )}
-                  <button type="button" className="btn btn-compact" onClick={resetFilters}>
-                    Clear search and filters
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <ol aria-label="Outcomes" className="pt-1">
-                {results.map((outcome, i) => {
-                  const previous = results[i - 1];
-                  const newGroup = showGroupHeadings && (!previous || previous.groupKey !== outcome.groupKey);
-                  const hit = result?.hits.get(outcome.id);
-                  const snippetField = hit?.fields.find((field) => RESULT_FIELDS.includes(field));
-                  const excerpt =
-                    snippetField && !hit!.fields.includes("outcomeDomain")
-                      ? snippet(outcome[snippetField].text, highlightRanges(outcome[snippetField].text, highlight))
-                      : null;
-                  const isSelected = outcome.id === selectedId;
-                  return (
-                    <li key={outcome.id}>
-                      {newGroup && (
-                        <p className="mt-5 mb-1 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-ink-muted first:mt-2">
-                          {categoryByKey.get(outcome.categoryKey)?.label.text}
-                          <span aria-hidden="true"> · </span>
-                          {groupByKey.get(outcome.groupKey)?.label.text}
-                        </p>
-                      )}
-                      <a
-                        id={`result-${outcome.id}`}
-                        href={hrefFor(outcome.id)}
-                        onClick={(event) => select(event, outcome.id)}
-                        aria-current={isSelected ? "true" : undefined}
-                        className={`group -mx-3 block border-l-2 px-3 py-2.5 transition-colors ${
-                          isSelected ? "border-accent bg-accent-soft/30" : "border-transparent hover:border-border hover:bg-paper-alt"
-                        }`}
-                      >
-                        <span className={`block font-medium ${isSelected ? "text-ink" : "text-ink group-hover:text-accent"}`}>
-                          <Highlighted text={outcome.outcomeDomain.text} highlight={highlight} />
-                          {outcome.outcomeDomain.fallback && (
-                            <span className="ml-2 align-middle text-[0.65rem] font-semibold text-ink-muted" title={`Not yet translated into ${view.languageName}`}>
-                              EN
-                            </span>
-                          )}
-                        </span>
-                        {!showGroupHeadings && (
-                          <span className="mt-0.5 block text-xs text-ink-muted">
-                            {categoryByKey.get(outcome.categoryKey)?.label.text} · {groupByKey.get(outcome.groupKey)?.label.text}
-                          </span>
-                        )}
-                        {excerpt && snippetField && (
-                          <span className="mt-1 block text-sm leading-snug text-ink-muted">
-                            <span className="mr-1 text-[0.7rem] font-semibold uppercase tracking-wide">{FIELD_LABELS[snippetField]}:</span>
-                            {excerpt.leading && "…"}
-                            <Highlighted text={excerpt.text} ranges={excerpt.ranges} />
-                            {excerpt.trailing && "…"}
-                          </span>
-                        )}
-                      </a>
-                    </li>
-                  );
-                })}
-              </ol>
-            )}
-          </div>
-
-          {/* Details */}
-          <div className={selected ? "" : "hidden lg:block"}>
-            <div
-              ref={detailPaneRef}
-              className="lg:sticky lg:top-28 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-2"
+      {/* Count and order */}
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-6 text-[0.8125rem] text-ink-muted">
+        <p id="dictionary-status" role="status" aria-live="polite">
+          {statusText}
+        </p>
+        <div className="flex flex-wrap items-center gap-x-5">
+          {isTranslation && (
+            <label className="flex min-h-11 items-center gap-2 sm:min-h-9">
+              <input
+                type="checkbox"
+                checked={translatedOnly}
+                onChange={(event) => setTranslatedOnly(event.target.checked)}
+                className="size-4 accent-[var(--teal-deep)]"
+              />
+              Translated only
+            </label>
+          )}
+          {filtersActive && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="min-h-11 text-ink underline decoration-1 underline-offset-[3px] transition-colors hover:text-accent sm:min-h-9"
             >
-              {selected ? (
-                <OutcomeDetail
-                  outcome={selected}
-                  category={categoryByKey.get(selected.categoryKey)}
-                  group={groupByKey.get(selected.groupKey)}
-                  language={view.language}
-                  languageName={view.languageName}
-                  masterLanguage={view.masterLanguage}
-                  roles={texts.roles}
-                  verbatimsHeading={texts.verbatimsHeading}
-                  verbatimsNote={texts.verbatimsNote}
-                  highlight={highlight}
-                  previous={neighbour(sequence[position - 1])}
-                  next={neighbour(sequence[position + 1])}
-                  shareUrl={shareUrlFor(selected.id)}
-                  headingRef={headingRef}
-                  onNavigate={select}
-                  backHref={hrefFor(null)}
-                  onBack={backToResults}
-                />
-              ) : (
-                <div className="border border-dashed border-border bg-paper-alt px-6 py-10 lg:mt-1">
-                  <p className="text-subheading font-semibold text-ink">Choose an outcome</p>
-                  <p className="mt-2 max-w-md text-body text-ink-muted">
-                    Select an outcome from the list to read its definition, how it can be experienced, and what participants said in
-                    their own words.
-                  </p>
-                  {texts.roles.length > 0 && (
-                    <dl className="mt-6 space-y-1 text-sm">
-                      {texts.roles.map((role) => (
-                        <div key={role.code} className="flex gap-2">
-                          <dt className="w-12 font-semibold text-ink">{role.code}</dt>
-                          <dd className="text-ink-muted">{role.label}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+              Clear all
+            </button>
+          )}
+          <label className="flex items-center gap-2">
+            Sort
+            <select
+              value={effectiveSort}
+              onChange={(event) => setSort(event.target.value as SortChoice)}
+              className="min-h-11 cursor-pointer border-0 bg-transparent font-medium text-ink sm:min-h-9"
+            >
+              {sortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       </div>
+
+      {focusedGroup && (
+        <button
+          type="button"
+          onClick={() => setGroupKey(null)}
+          className="mt-2 min-h-11 text-sm font-semibold text-ink transition-colors hover:text-accent"
+        >
+          <span aria-hidden="true">← </span>All groups
+        </button>
+      )}
+
+      {/* The index */}
+      <div className="mt-1">
+        {filtered.length === 0 ? (
+          <div className="py-14 text-center">
+            <p className="font-semibold text-ink">
+              {searching ? <>No outcomes match &ldquo;{query.trim()}&rdquo;</> : "No outcomes match these filters"}
+            </p>
+            <p className="mx-auto mt-2 max-w-sm text-sm text-ink-muted">
+              {categoryKey && searching
+                ? "Try searching all categories, or check the spelling."
+                : searching
+                  ? "Search looks for any part of a word, ignores accents and capitals and allows small typos. Try fewer words, or a related word."
+                  : "Try another category or group domain."}
+            </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-x-6">
+              {categoryKey && searching && (
+                <button type="button" className="min-h-11 text-sm font-medium text-ink underline underline-offset-[3px]" onClick={() => chooseCategory(null)}>
+                  Search all categories
+                </button>
+              )}
+              <button type="button" className="min-h-11 text-sm font-medium text-ink underline underline-offset-[3px]" onClick={resetFilters}>
+                Clear search and filters
+              </button>
+            </div>
+          </div>
+        ) : (
+          <OutcomeIndex
+            layout={layout}
+            categoryByKey={categoryByKey}
+            groupByKey={groupByKey}
+            tones={tones}
+            search={result}
+            selectedId={selectedId}
+            languageName={view.languageName}
+            focusedGroup={groupKey}
+            openGroups={openGroups}
+            hrefFor={(id) => hrefFor(id)}
+            onSelect={select}
+            onFocusGroup={setGroupKey}
+            onToggleGroup={toggleGroup}
+          />
+        )}
+      </div>
+
+      {selected && (
+        <OutcomeDetail
+          outcome={selected}
+          category={categoryByKey.get(selected.categoryKey)}
+          group={groupByKey.get(selected.groupKey)}
+          tone={tones.get(selected.categoryKey)}
+          language={view.language}
+          languageName={view.languageName}
+          masterLanguage={view.masterLanguage}
+          roles={texts.roles}
+          verbatimsHeading={texts.verbatimsHeading}
+          verbatimsNote={texts.verbatimsNote}
+          highlight={highlight}
+          previous={neighbour(sequence[position - 1])}
+          next={neighbour(sequence[position + 1])}
+          shareUrl={shareUrlFor(selected.id)}
+          onNavigate={select}
+          onClose={closeEntry}
+        />
+      )}
     </div>
   );
 }

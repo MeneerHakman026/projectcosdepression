@@ -1,10 +1,10 @@
 import { Suspense } from "react";
 import RichText from "@/components/RichText";
-import Section from "@/components/Section";
-import TriMark from "@/components/TriMark";
 import type { DictionaryPageContent } from "@/content/dictionary/schema";
 import type { DictionaryView } from "@/lib/dictionary/view";
-import DictionaryExplorer, { type ExplorerFilters } from "./DictionaryExplorer";
+import DictionaryExplorer, { type ExplorerFilters, type SortChoice } from "./DictionaryExplorer";
+import DictionaryHeader from "./DictionaryHeader";
+import { DICTIONARY_CONTAINER } from "./layout";
 
 type DictionaryPageProps = {
   content: DictionaryPageContent;
@@ -17,91 +17,80 @@ type DictionaryPageProps = {
 
 const dateFormatter = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
+function plural(n: number, singular: string, pluralForm = `${singular}s`) {
+  return `${n} ${n === 1 ? singular : pluralForm}`;
+}
+
 /**
  * The Outcome Dictionary page. Wording comes from the CMS page
  * (`content`); every category, group, outcome and count comes from the
  * published dataset (`view`). Rendered by the public route and by the admin
  * preview, so a preview is always the real page.
+ *
+ * The page opens on a compact title, the search and the dictionary itself;
+ * the CMS introduction, sources and version are in the "About this
+ * dictionary" disclosure beside the title.
  */
 export default function DictionaryPage({ content, view, basePath, urlMode, preserve, filters }: DictionaryPageProps) {
   const { intro } = content;
 
-  return (
+  const about = (
     <>
-      <section className="border-b border-border bg-paper">
-        <div className="mx-auto max-w-wide px-gutter pt-12 pb-10 sm:pt-16 lg:pt-20">
-          <TriMark className="mb-5" />
-          <p className="text-sm font-semibold uppercase tracking-wide text-accent">{intro.eyebrow}</p>
-          <h1 className="mt-2 max-w-3xl text-display font-bold tracking-tight text-ink">{intro.heading}</h1>
-          <p className="mt-4 max-w-3xl text-lead leading-relaxed text-ink-muted">
-            <RichText text={intro.description} />
-          </p>
-          {view && (
-            <dl className="mt-8 flex flex-wrap gap-x-10 gap-y-4">
-              {[
-                [view.totals.outcomes, view.totals.outcomes === 1 ? "outcome domain" : "outcome domains"],
-                [view.totals.categories, view.totals.categories === 1 ? "category" : "categories"],
-                [view.totals.groups, view.totals.groups === 1 ? "group domain" : "group domains"],
-              ].map(([value, label]) => (
-                <div key={String(label)} className="flex flex-col-reverse">
-                  <dt className="text-sm text-ink-muted">{label}</dt>
-                  <dd className="text-heading font-bold tabular-nums tracking-tight text-ink">{value}</dd>
-                </div>
-              ))}
-              {view.languages.length > 1 && (
-                <div className="flex flex-col-reverse">
-                  <dt className="text-sm text-ink-muted">languages</dt>
-                  <dd className="text-heading font-bold tabular-nums tracking-tight text-ink">{view.languages.length}</dd>
-                </div>
-              )}
-            </dl>
-          )}
-        </div>
-      </section>
-
-      {view ? (
-        <div className="py-10 sm:py-12">
-          {/* useSearchParams in the explorer needs a Suspense boundary. */}
-          <Suspense>
-            <DictionaryExplorer
-              view={view}
-              texts={{
-                explorerHeading: content.explorer.heading,
-                verbatimsHeading: content.verbatims.heading,
-                verbatimsNote: content.verbatims.note,
-                roles: content.verbatims.roles,
-              }}
-              basePath={basePath}
-              urlMode={urlMode}
-              preserve={preserve}
-              initialFilters={filters}
-            />
-          </Suspense>
-        </div>
-      ) : (
-        <Section width="narrow">
-          <h2 className="text-subheading font-semibold text-ink">{content.unavailable.heading}</h2>
-          <p className="mt-3 text-body leading-relaxed text-ink-muted">
-            <RichText text={content.unavailable.body} />
-          </p>
-        </Section>
-      )}
-
-      <Section width="wide" divider>
-        <div className="max-w-3xl">
-          <h2 className="text-subheading font-semibold text-ink">{content.source.heading}</h2>
-          <p className="mt-3 text-body leading-relaxed text-ink-muted">
-            <RichText text={content.source.body} />
-          </p>
-          {view?.release && (
-            <p className="mt-4 text-xs text-ink-muted">
+      <p>
+        <RichText text={intro.description} />
+      </p>
+      <p>
+        <RichText text={content.source.body} />
+      </p>
+      {view && (
+        <p className="pt-1 text-[0.8125rem] leading-normal">
+          {plural(view.totals.outcomes, "outcome domain")} · {plural(view.totals.categories, "category", "categories")} ·{" "}
+          {plural(view.totals.groups, "group domain")}
+          {view.release && (
+            <>
+              <br />
               Dictionary version {view.release.number}
               {view.release.publishedAt && <> · published {dateFormatter.format(new Date(view.release.publishedAt))}</>}
-            </p>
+            </>
           )}
-        </div>
-      </Section>
+        </p>
+      )}
     </>
+  );
+
+  return (
+    <div className="dictionary-canvas bg-dict-canvas">
+      {view ? (
+        // useSearchParams in the explorer needs a Suspense boundary.
+        <Suspense>
+          <DictionaryExplorer
+            view={view}
+            texts={{
+              heading: intro.heading,
+              aboutLabel: content.source.heading,
+              verbatimsHeading: content.verbatims.heading,
+              verbatimsNote: content.verbatims.note,
+              roles: content.verbatims.roles,
+            }}
+            about={about}
+            basePath={basePath}
+            urlMode={urlMode}
+            preserve={preserve}
+            initialFilters={filters}
+          />
+        </Suspense>
+      ) : (
+        <div className={`${DICTIONARY_CONTAINER} pt-3 pb-16 sm:pt-5`}>
+          <DictionaryHeader title={intro.heading} aboutLabel={content.source.heading} about={about} defaultOpen />
+          <div className="mt-6 max-w-2xl border-t border-dict-rule pt-6">
+            <h2 className="text-lg font-semibold text-ink">{content.unavailable.heading}</h2>
+            <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-muted">
+              <RichText text={content.unavailable.body} />
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -112,11 +101,13 @@ export function filtersFromSearchParams(params: Record<string, string | string[]
     return (Array.isArray(value) ? value[0] : value)?.slice(0, 200) ?? "";
   };
   const sort = one("sort");
+  // "source" is the old name for dictionary order, kept so earlier links still work.
+  const sortChoice: SortChoice = sort === "alpha" || sort === "relevance" ? sort : "auto";
   return {
     q: one("q"),
     category: one("category") || null,
     group: one("group") || null,
-    sort: sort === "source" || sort === "alpha" ? sort : "auto",
+    sort: sortChoice,
     translatedOnly: one("translated") === "1",
   };
 }

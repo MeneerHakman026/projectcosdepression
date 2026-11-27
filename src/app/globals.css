@@ -85,6 +85,18 @@
   --color-teal: var(--teal);
   --color-mint: var(--mint);
 
+  /* Outcome Dictionary: the warm neutrals of the approved v3 design
+     (docs/design, local only). Used by components/dictionary only. */
+  --color-dict-canvas: #fcfbfa;
+  --color-dict-rule: #eae6e3;
+  --color-dict-rule-soft: #f0ece9;
+  --color-dict-card: #e9e5e2;
+  --color-dict-field: #ddd8d5;
+  --color-dict-hover: #f7f4f2;
+  --color-dict-hover-soft: #faf8f7;
+  --color-dict-quote: #b9c0cc;
+  --color-dict-ink-soft: #37425c;
+
   --font-sans: var(--font-inter);
 }
 
@@ -175,4 +187,92 @@ section[id] {
     background: var(--color-accent-hover);
     border-color: var(--color-accent-hover);
   }
+}
+
+/* Outcome Dictionary: a short, quiet fade as a new entry is opened. Used
+   with motion-safe:, so it never runs for prefers-reduced-motion. */
+@keyframes entry-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Outcome Dictionary entry sheet: slides in from the right (desktop) or up
+   from the bottom (mobile). Used with motion-safe: only. */
+@keyframes sheet-in-right {
+  from {
+    transform: translateX(32px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes sheet-in-up {
+  from {
+    transform: translateY(48px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* The Dictionary's warm canvas fills the page down to the footer, even
+   when a search leaves only a few results. */
+main:has(> .dictionary-canvas) {
+  display: flex;
+  flex-direction: column;
+}
+
+.dictionary-canvas {
+  flex: 1 0 auto;
+}
+
+/* The search field's frame shows its focus (see DictionaryExplorer), so the
+   input itself doesn't draw a second outline inside it. */
+#dictionary-search:focus-visible {
+  outline: none;
+}
+
+dialog.dictionary-entry::backdrop {
+  background: rgb(31 42 68 / 0.32);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  dialog.dictionary-entry[open]::backdrop {
+    animation: backdrop-in 180ms ease-out;
+  }
+}
+
+/* Before hydration a deep-linked entry is server-rendered open (not yet
+   modal); a wide shadow stands in for the backdrop so the page doesn't
+   flash between the HTML and the modal dialog. */
+dialog.dictionary-entry[data-ssr-open] {
+  display: flex;
+  box-shadow: 0 0 0 100vmax rgb(31 42 68 / 0.32);
+  z-index: 60;
+}
+
+/* The page behind an open entry doesn't scroll. */
+html:has(dialog.dictionary-entry[open]),
+html:has(dialog.dictionary-entry[data-ssr-open]) {
+  overflow: hidden;
 }
