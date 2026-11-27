@@ -25,7 +25,7 @@ export default function DictionaryHeader({ title, aboutLabel, about, aside, defa
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-x-4">
-        <h1 className="text-[1.375rem] font-bold leading-[1.25] tracking-[-0.02em] text-ink sm:text-[1.75rem]">{title}</h1>
+        <h1 className="text-[1.375rem] font-bold leading-[1.25] tracking-[-0.02em] text-ink sm:text-[1.75rem] lg:text-[1.375rem]">{title}</h1>
         <div className="flex items-center gap-x-5">
           {aside}
           <button
@@ -36,8 +36,8 @@ export default function DictionaryHeader({ title, aboutLabel, about, aside, defa
             onClick={() => setOpen((value) => !value)}
             className="min-h-11 text-sm text-ink-muted underline decoration-1 underline-offset-[3px] transition-colors hover:text-ink"
           >
-            <span className="sm:hidden">About</span>
-            <span className="max-sm:hidden">{aboutLabel}</span>
+            <span className="sm:max-lg:hidden">About</span>
+            <span className="max-sm:hidden lg:hidden">{aboutLabel}</span>
           </button>
         </div>
       </div>

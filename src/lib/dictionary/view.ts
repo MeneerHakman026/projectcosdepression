@@ -1,3 +1,4 @@
+import { translatedOutcomeCount } from "./translation-count";
 import { languageName, nativeLanguageName } from "./languages";
 import { MASTER_LANGUAGE, type DictionaryContent, type TextField } from "./model";
 import { deriveTaxonomy } from "./taxonomy";
@@ -27,7 +28,25 @@ export type ViewOutcome = {
 export type ViewGroup = { key: string; slug: string; label: LocalizedText; count: number };
 export type ViewCategory = { key: string; slug: string; label: LocalizedText; count: number; groups: ViewGroup[] };
 
-export type ViewLanguage = { code: string; name: string; nativeName: string; translated: number };
+/**
+ * A language in the language menu. `translated` is the number of outcomes
+ * fully translated (translatedOutcomeCount); for the master language, which
+ * is the source rather than a translation, it is the total.
+ */
+export type ViewLanguage = {
+  code: string;
+  /** English name ("French"), for sentences such as "Not yet translated into French". */
+  name: string;
+  nativeName: string;
+  /** The menu label: the language's own name, capitalised ("English", "Français"). */
+  label: string;
+  translated: number;
+};
+
+function viewLanguage(code: string, translated: number): ViewLanguage {
+  const nativeName = nativeLanguageName(code);
+  return { code, name: languageName(code), nativeName, label: nativeName.charAt(0).toLocaleUpperCase(code) + nativeName.slice(1), translated };
+}
 
 export type DictionaryView = {
   language: string;
@@ -41,15 +60,16 @@ export type DictionaryView = {
 };
 
 /**
- * @param counts translated-outcome count per language. Public pages load only
- *   one translation, so the full list comes from the release summary.
+ * @param counts fully translated outcomes per language (translatedOutcomeCount).
+ *   Public pages load only one translation, so the server computes these
+ *   for every language (see server.ts).
  */
 export function availableLanguages(total: number, counts: Record<string, number>): ViewLanguage[] {
   return [
-    { code: MASTER_LANGUAGE, name: languageName(MASTER_LANGUAGE), nativeName: nativeLanguageName(MASTER_LANGUAGE), translated: total },
+    viewLanguage(MASTER_LANGUAGE, total),
     ...Object.keys(counts)
       .sort()
-      .map((code) => ({ code, name: languageName(code), nativeName: nativeLanguageName(code), translated: counts[code] })),
+      .map((code) => viewLanguage(code, counts[code])),
   ];
 }
 
@@ -61,7 +81,7 @@ export function buildView(
 ): DictionaryView {
   const counts =
     languageCounts ??
-    Object.fromEntries(Object.entries(content.translations).map(([code, t]) => [code, Object.keys(t.outcomes).length]));
+    Object.fromEntries(Object.keys(content.translations).map((code) => [code, translatedOutcomeCount(content, code)]));
   const language =
     requestedLanguage === MASTER_LANGUAGE || requestedLanguage in content.translations ? requestedLanguage : MASTER_LANGUAGE;
   const translation = language === MASTER_LANGUAGE ? undefined : content.translations[language];

@@ -73,7 +73,7 @@ export default function CategoryNav({
             aria-pressed={selected}
             onClick={() => onSelect(selected ? null : category.key)}
             style={toneVars(tones.get(category.key))}
-            className={`${tab(selected)} after:bg-[var(--cat-text)] ${filtered && count === 0 ? "text-ink-muted font-normal" : ""}`}
+            className={`${tab(selected)} after:bg-[var(--cat-line)] ${filtered && count === 0 ? "text-ink-muted font-normal" : ""}`}
           >
             <span lang={category.label.fallback ? "en" : undefined}>
               {category.label.text}

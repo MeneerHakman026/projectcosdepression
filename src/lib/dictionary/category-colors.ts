@@ -7,8 +7,9 @@ import { labelKey } from "./text";
  * not known in advance. Colours are therefore assigned from the category's
  * *identity* (its label key), never from its position in the workbook:
  *
- *  1. A few well-known names have a preferred colour (Symptoms → rose,
- *     Functioning → teal). These are preferences, not a fixed taxonomy.
+ *  1. A few well-known names have a preferred colour, taken from the COS-D
+ *     logo (Symptoms → turquoise, Functioning → navy with a mint band).
+ *     These are preferences, not a fixed taxonomy.
  *  2. Every other category hashes its key to a preferred palette slot. Taken
  *     slots are resolved by probing to the next free slot, processing
  *     categories in a fixed order (preferred slot, then key) so the result
@@ -19,6 +20,7 @@ import { labelKey } from "./text";
  * Every tone is checked (category-colors.test.ts) against WCAG AA:
  *  - `text`  ≥ 4.5:1 on white and on `soft` (labels, counts, headings)
  *  - `line`  ≥ 3:1 on white (dots, rules, selection bars: non-text UI)
+ *  - the entry band's text ≥ 4.5:1 on the band
  * Colour never carries meaning alone: category names are always shown.
  */
 
@@ -31,11 +33,21 @@ export type CategoryTone = {
   soft: string;
   /** Light tint for borders and muted fills. */
   tint: string;
+  /** Background of the entry's header band, when not `text`. Its text colour is chosen by contrast. */
+  band?: string;
 };
 
+/**
+ * The COS-D logo's colours (also the site's --teal, --mint and --navy
+ * tokens in globals.css).
+ */
+export const LOGO = { turquoise: "#4F9AA7", mint: "#9FD0C2", navy: "#1C2C43" } as const;
+
 export const CATEGORY_PALETTE: readonly (CategoryTone & { name: string })[] = [
-  { name: "rose", text: "#97405A", line: "#B85B70", soft: "#F9EDF0", tint: "#EFC8D1" },
-  { name: "teal", text: "#2D6D78", line: "#408B97", soft: "#E8F3F3", tint: "#B7DADD" },
+  // From the logo: its turquoise for rules and bars, deepened for text and the band.
+  { name: "turquoise", text: "#3A7480", line: LOGO.turquoise, soft: "#EAF3F5", tint: "#BBDCE2" },
+  // From the logo: its navy (lightened enough to stand apart from the page's ink), with a mint band.
+  { name: "navy", text: "#2C4560", line: "#4D6884", soft: "#EAF5F1", tint: "#C4E3D9", band: LOGO.mint },
   { name: "ochre", text: "#7F5712", line: "#B07D2B", soft: "#F7F0E1", tint: "#E8D4A8" },
   { name: "slate", text: "#43578A", line: "#5B71A8", soft: "#EDF0F8", tint: "#C5CEE6" },
   { name: "sage", text: "#4A6B40", line: "#6A8E5E", soft: "#EDF3EA", tint: "#C9DAC0" },
@@ -47,8 +59,8 @@ export const CATEGORY_PALETTE: readonly (CategoryTone & { name: string })[] = [
 
 /** Preferred slots for category names researchers already use. */
 const PREFERRED: Record<string, string> = {
-  symptoms: "rose",
-  functioning: "teal",
+  symptoms: "turquoise",
+  functioning: "navy",
 };
 
 /** FNV-1a: small, stable across runtimes, good enough spread for a few dozen keys. */
@@ -150,8 +162,29 @@ export function assignCategoryTones(categoryKeys: readonly string[]): Map<string
   return new Map(categoryKeys.map((key) => [key, result.get(labelKey(key))!]));
 }
 
+/** The page's ink (the logo navy), the darker of the two text colours a band can carry. */
+export const BAND_INK = LOGO.navy;
+
+/**
+ * The coloured band at the top of an outcome entry: the tone's `band`, or
+ * else its deep `text` accent, with whichever of white or ink reads best on it.
+ */
+export function bandColors(tone: CategoryTone): { background: string; text: string } {
+  const background = tone.band ?? tone.text;
+  const text = contrast(background, "#FFFFFF") >= contrast(background, BAND_INK) ? "#FFFFFF" : BAND_INK;
+  return { background, text };
+}
+
 /** CSS custom properties for a tone, for `style={...}` on an element and its children. */
 export function toneVars(tone: CategoryTone | undefined): Record<string, string> {
   if (!tone) return {};
-  return { "--cat-text": tone.text, "--cat-line": tone.line, "--cat-soft": tone.soft, "--cat-tint": tone.tint };
+  const band = bandColors(tone);
+  return {
+    "--cat-text": tone.text,
+    "--cat-line": tone.line,
+    "--cat-soft": tone.soft,
+    "--cat-tint": tone.tint,
+    "--cat-band": band.background,
+    "--cat-band-text": band.text,
+  };
 }

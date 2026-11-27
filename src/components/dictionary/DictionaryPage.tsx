@@ -13,6 +13,8 @@ type DictionaryPageProps = {
   urlMode: "path" | "query";
   preserve?: Record<string, string>;
   filters: ExplorerFilters;
+  /** Space a fixed bar takes at the bottom of the viewport (the admin preview's notice). */
+  bottomInset?: string;
 };
 
 const dateFormatter = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" });
@@ -31,8 +33,15 @@ function plural(n: number, singular: string, pluralForm = `${singular}s`) {
  * the CMS introduction, sources and version are in the "About this
  * dictionary" disclosure beside the title.
  */
-export default function DictionaryPage({ content, view, basePath, urlMode, preserve, filters }: DictionaryPageProps) {
+export default function DictionaryPage({ content, view, basePath, urlMode, preserve, filters, bottomInset }: DictionaryPageProps) {
   const { intro } = content;
+
+  const totals = view && (
+    <>
+      {plural(view.totals.outcomes, "outcome domain")} · {plural(view.totals.categories, "category", "categories")} ·{" "}
+      {plural(view.totals.groups, "group domain")}
+    </>
+  );
 
   const about = (
     <>
@@ -44,8 +53,7 @@ export default function DictionaryPage({ content, view, basePath, urlMode, prese
       </p>
       {view && (
         <p className="pt-1 text-[0.8125rem] leading-normal">
-          {plural(view.totals.outcomes, "outcome domain")} · {plural(view.totals.categories, "category", "categories")} ·{" "}
-          {plural(view.totals.groups, "group domain")}
+          {totals}
           {view.release && (
             <>
               <br />
@@ -73,6 +81,15 @@ export default function DictionaryPage({ content, view, basePath, urlMode, prese
               roles: content.verbatims.roles,
             }}
             about={about}
+            placeholder={
+              <>
+                <p className="mb-3">
+                  <RichText text={intro.description} />
+                </p>
+                <p className="text-[0.8125rem]">{totals}</p>
+              </>
+            }
+            bottomInset={bottomInset}
             basePath={basePath}
             urlMode={urlMode}
             preserve={preserve}
