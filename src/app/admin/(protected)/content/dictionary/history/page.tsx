@@ -25,12 +25,7 @@ export default async function DictionaryHistoryPage() {
 
   return (
     <div>
-      <p className="text-sm">
-        <Link href="/admin/content/dictionary" className="text-ink-muted underline underline-offset-2 hover:text-ink">
-          ← Outcome Dictionary
-        </Link>
-      </p>
-      <h1 className="mt-2 text-heading font-semibold text-ink">Version history</h1>
+      <h1 className="text-heading font-semibold text-ink">Version history</h1>
       <p className="mt-2 max-w-3xl text-body text-ink-muted">
         Every import and restore is kept as a complete version. Restoring copies an older version into a new draft — nothing
         is deleted, and the live dictionary only changes when you publish.
@@ -70,7 +65,7 @@ export default async function DictionaryHistoryPage() {
             </button>
           </form>
 
-          <div className="mt-6 overflow-x-auto border border-border">
+          <div className="relative mt-6 overflow-x-auto border border-border">
             <table className="w-full min-w-[900px] border-collapse text-left text-sm">
               <thead className="bg-paper-alt">
                 <tr className="border-b border-border">

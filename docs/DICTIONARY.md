@@ -67,8 +67,11 @@ Participant quotations are never edited. The site splits a Verbatims cell into l
 
 ## Workflow
 
-**Import → Check → Save draft → Preview → Publish**
+**Template → Import → Check & inspect → Save draft → Inspect / preview → Publish**
 
+The admin section (Content → Outcome Dictionary) has four tabs: **Overview**, **Inspect data**, **Import Excel** and **Version history**. It manages only the *data*. The page wording (introduction, headings, source note, participant legend) is edited separately under Content → Pages → "Outcome Dictionary page"; the data overview deliberately has no link into that editor, so there's one entry point for each.
+
+0. **Template** ("Download Excel template", always available, also before anything is imported): a blank workbook with an *Instructions* sheet and an empty `en` sheet with the seven headers. Every column is formatted as Text, and each header has a note explaining it. The Instructions sheet explains the stable Variable ID, the Category → Group Domain → Outcome Domain hierarchy, one row per outcome, how categories and groups are derived, and how to keep quotations exact. It also lists the participant abbreviations currently set up in the page text. It has no data rows, and importing it unfilled gives one clear error.
 1. **Import** (Outcome Dictionary → Import Excel): choose the file and what it contains (English master, or a translation).
 2. **Check** validates and compares against the **live** dictionary. Nothing is stored. The preview shows:
    - counts before and after
@@ -77,6 +80,8 @@ Participant quotations are never edited. The site splits a Verbatims cell into l
    - category and group additions, removals and renames
    - translation changes
    - errors, warnings and notes
+   - an **Import summary**: records, categories, group domains, language, added, modified, removed and unchanged records, errors and warnings
+   - **Inspect imported data**: the Dataset Explorer (below) on every record exactly as read, with its Excel row and its errors and warnings. For a file with errors, the rows that could be read are still shown, marked as unsaveable.
 
    Removals need an explicit "I have reviewed…" tick. Changed quotations are flagged. A file identical to the current version is reported as "no changes" and can't be saved.
 3. **Save as draft** sends the same file again. The server repeats the whole analysis and saves only if the file's hash *and* the dictionary's state are unchanged since the check, so what's saved is exactly what was reviewed. The public site doesn't change. The uploaded file isn't stored; only its name, size and SHA-256 are kept.
@@ -85,6 +90,17 @@ Participant quotations are never edited. The site splits a Verbatims cell into l
 
 **Replacement semantics.** An English master import replaces the whole master: outcomes not in the file disappear in the new version. Translations of removed outcomes are dropped from that version with a warning, and earlier versions keep them. A translation import replaces that one language. Everything else carries over from the current draft (or the live version if there's no draft). There's no incremental merge.
 
+**Inspect data** (the Dataset Explorer, read-only). It works on the draft, the published version or any earlier version; the draft is shown by default, with a banner that says which version you are looking at and whether it's public.
+
+- **List:** Variable, Outcome Domain, Category and Group Domain, plus checks such as empty columns or symbol-font characters, 50 records per page.
+- **Search:** all seven columns, ignoring case, accents and quote style; every word must match. "Found in" shows which columns matched.
+- **Filters:** Category, Group Domain, Language and "Only records needing attention", all built from the selected version with their counts.
+- **Record view:** all seven columns exactly as stored (`white-space: pre-wrap`, never trimmed). It shows character and line counts, can make spaces and line breaks visible, and always marks unprintable characters (for example U+F0E0). For Verbatims it explains how the public page will group the quotations.
+- **Translations:** shown beside the English master; untranslated columns are marked.
+- **Links:** filters and the open record are kept in the URL (`?dataset=draft&q=…&record=V_01`), so links are shareable and the browser's Back button works.
+
+Search runs in the browser. A dictionary holds at most 5,000 rows, and tests cover 5,000 records (search in under 150 ms) and a 1,500-row import in the browser.
+
 **History.** Every import, restore and language removal is a complete, immutable version. From Version history you can:
 
 - **View** any version in the preview
@@ -92,14 +108,15 @@ Participant quotations are never edited. The site splits a Verbatims cell into l
 - **Export** any version to Excel
 - **Restore** a version. This copies it into a *new* draft, so history is never rewritten. Publish to make it live.
 
-**Export** (Outcome Dictionary → Export to Excel):
+**Export** (Overview → "Excel templates and exports"):
 
 | Export | What you get |
 |---|---|
 | English master | Exactly the seven source columns, sheet `en` |
 | One language | Sheet named with the language code, plus grey "(English reference)" columns |
 | All languages | `en`, then one sheet per translation |
-| Empty translation template | Every ID with the English text for reference |
+| Blank English master template | The seven headers and an Instructions sheet; needs no data |
+| Translation template | Every ID of the chosen version with the English text for reference; the file name (`…-template-from-v3-…`) and its About sheet name the source version |
 
 Every export has an "About" sheet with instructions, which is ignored on import. Exports re-import with **no changes**; this is tested.
 

@@ -2,7 +2,7 @@ import "server-only";
 import { diffContents, needsAcknowledgement, reviewAlerts, type DatasetDiff, type ReviewAlert } from "./diff";
 import { contentHash, sha256Hex } from "./hash";
 import { analyzeImport, type ImportIssue, type SheetPlan } from "./import";
-import type { DictionaryContent } from "./model";
+import { MASTER_LANGUAGE, type DictionaryContent, type LanguageTranslation, type MasterOutcome } from "./model";
 import { readWorkbook } from "./xlsx-read";
 
 /**
@@ -26,6 +26,20 @@ export type ImportPreview = {
   unchanged: boolean;
   basedOn: { kind: "draft" | "live" | "empty"; releaseNumber: number | null };
   stateVersion: number;
+  /** Every record as read from the workbook, for inspection before saving. */
+  inspect: ImportInspection | null;
+};
+
+export type ImportInspection = {
+  outcomes: MasterOutcome[];
+  translations: Record<string, LanguageTranslation>;
+  /** Excel row of each outcome in `sheet`, aligned with `outcomes`. */
+  rowNumbers: (number | null)[];
+  sheet: string | null;
+  /** The language the import is about (shown first). */
+  language: string;
+  /** Read from a file with errors: shows what was read; it can't be saved. */
+  partial: boolean;
 };
 
 export type PreparedImport = { preview: ImportPreview; proposed: DictionaryContent | null };
@@ -61,6 +75,7 @@ export async function prepareImport(
     unchanged: false,
     basedOn,
     stateVersion: base.version,
+    inspect: null as ImportInspection | null,
   };
 
   const read = await readWorkbook(bytes);
@@ -69,14 +84,50 @@ export async function prepareImport(
   }
 
   const analysis = analyzeImport(read.sheets, { language: options.language, roleCodes: options.roleCodes }, base.content);
+  const readMaster = analysis.interpreted?.master ?? null;
   if (!analysis.ok || !analysis.proposed) {
+    const inspect: ImportInspection | null =
+      readMaster && readMaster.outcomes.length > 0
+        ? {
+            outcomes: readMaster.outcomes,
+            translations: {},
+            rowNumbers: readMaster.rowNumbers,
+            sheet: readMaster.sheet,
+            language: MASTER_LANGUAGE,
+            partial: true,
+          }
+        : null;
     return {
-      preview: { ...empty, ok: false, issues: analysis.issues, sheets: analysis.sheets, replaces: analysis.replaces },
+      preview: { ...empty, ok: false, issues: analysis.issues, sheets: analysis.sheets, replaces: analysis.replaces, inspect },
       proposed: null,
     };
   }
 
-  const diff = diffContents(base.live, analysis.proposed);
+  const proposed = analysis.proposed;
+  let inspect: ImportInspection;
+  if (readMaster) {
+    inspect = {
+      outcomes: proposed.master.outcomes,
+      translations: proposed.translations,
+      rowNumbers: readMaster.rowNumbers,
+      sheet: readMaster.sheet,
+      language: MASTER_LANGUAGE,
+      partial: false,
+    };
+  } else {
+    const language = analysis.replaces[0] ?? MASTER_LANGUAGE;
+    const rows = analysis.interpreted?.translationRows[language] ?? {};
+    inspect = {
+      outcomes: proposed.master.outcomes,
+      translations: proposed.translations,
+      rowNumbers: proposed.master.outcomes.map((outcome) => rows[outcome.id] ?? null),
+      sheet: analysis.sheets.find((sheet) => sheet.role === "translation" && sheet.language === language)?.name ?? null,
+      language,
+      partial: false,
+    };
+  }
+
+  const diff = diffContents(base.live, proposed);
   return {
     preview: {
       ...empty,
@@ -87,8 +138,9 @@ export async function prepareImport(
       diff,
       alerts: reviewAlerts(diff),
       needsAcknowledgement: needsAcknowledgement(diff),
-      unchanged: contentHash(analysis.proposed) === contentHash(base.content),
+      unchanged: contentHash(proposed) === contentHash(base.content),
+      inspect,
     },
-    proposed: analysis.proposed,
+    proposed,
   };
 }

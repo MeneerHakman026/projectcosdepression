@@ -1,14 +1,12 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { NextResponse, type NextRequest } from "next/server";
-import type { DictionaryPageContent } from "@/content/dictionary/schema";
 import { SESSION_COOKIE_NAME, readSessionToken } from "@/lib/admin/auth";
 import { editorNameOf } from "@/lib/admin/session";
-import { DICTIONARY_PAGE } from "@/lib/cms/pages";
-import { cms } from "@/lib/cms/server";
 import { canonicalLanguage } from "@/lib/dictionary/languages";
 import { MASTER_LANGUAGE } from "@/lib/dictionary/model";
 import { prepareImport, type ImportPreview } from "@/lib/dictionary/pipeline";
+import { participantRoleCodes } from "@/lib/dictionary/roles";
 import { dictionary } from "@/lib/dictionary/server";
 import { DictionaryNotInstalledError } from "@/lib/dictionary/service";
 import { MAX_UPLOAD_BYTES } from "@/lib/dictionary/xlsx-read";
@@ -79,15 +77,6 @@ function isSameOrigin(request: NextRequest): boolean {
   return !origin || origin === request.nextUrl.origin;
 }
 
-async function roleCodes(): Promise<string[]> {
-  try {
-    const page = (await cms.getPublishedContent(DICTIONARY_PAGE)) as DictionaryPageContent;
-    return page.verbatims.roles.map((role) => role.code);
-  } catch {
-    return DICTIONARY_PAGE.defaults.verbatims.roles.map((role) => role.code);
-  }
-}
-
 export async function POST(request: NextRequest) {
   const session = readSessionToken((await cookies()).get(SESSION_COOKIE_NAME)?.value);
   if (!session) return error("Your admin session has expired. Sign in again, then retry.", 401);
@@ -106,7 +95,7 @@ export async function POST(request: NextRequest) {
     const base = await dictionary.getBase();
     const prepared = await prepareImport(
       bytes,
-      { fileName: cleanFileName(params.get("fileName")), language, roleCodes: await roleCodes() },
+      { fileName: cleanFileName(params.get("fileName")), language, roleCodes: await participantRoleCodes() },
       {
         version: base.state.version,
         draftNumber: base.state.draft?.number ?? null,
